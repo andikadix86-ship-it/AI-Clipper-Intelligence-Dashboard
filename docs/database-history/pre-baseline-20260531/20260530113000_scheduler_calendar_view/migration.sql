@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "PostingSchedule" ADD COLUMN IF NOT EXISTS "notes" TEXT NOT NULL DEFAULT '';

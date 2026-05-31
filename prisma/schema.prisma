@@ -1,0 +1,1074 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Project {
+  id                     String                        @id @default(cuid())
+  name                   String
+  niche                  String
+  category               String
+  targetAccounts         String[]
+  contentMode            ContentMode                   @default(CLIPPER)
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  videoSources           VideoSource[]
+  socialAccounts         SocialAccount[]
+  contentItems           ContentItem[]
+  creativeAssets         CreativeAsset[]
+  generationJobs         GenerationJob[]
+  schedules              PostingSchedule[]
+  analytics              PostAnalytics[]
+  platformSnapshots      PlatformPerformanceSnapshot[]
+  recommendationInsights RecommendationInsight[]
+  assetCollections       AssetCollection[]
+  agentTasks             AgentTask[]
+  agentRecommendations   AgentRecommendation[]
+  automationPlans        AutomationPlan[]
+  mediaJobs              MediaProcessingJob[]
+}
+
+model VideoSource {
+  id               String               @id @default(cuid())
+  projectId        String?
+  platform         Platform
+  sourceType       VideoSourceType      @default(URL)
+  sourceFileUrl    String?
+  originalFileName String?
+  fileSize         Int?
+  mimeType         String?
+  url              String
+  videoId          String?
+  title            String
+  thumbnail        String
+  embedUrl         String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  settings         ClipSetting[]
+  clips            GeneratedClip[]
+  schedules        PostingSchedule[]
+  mediaJobs        MediaProcessingJob[]
+  project          Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+model ClipSetting {
+  id            String          @id @default(cuid())
+  videoSourceId String
+  prompt        String
+  watermark     Boolean         @default(true)
+  subtitle      Boolean         @default(true)
+  category      String
+  clipCount     Int
+  duration      Int
+  resolution    String
+  layout        String          @default("Auto Reframe")
+  subtitleStyle String          @default("Bold Creator")
+  textPlacement String          @default("Lower Third")
+  ccLanguage    String          @default("id-ID")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  videoSource   VideoSource     @relation(fields: [videoSourceId], references: [id], onDelete: Cascade)
+  clips         GeneratedClip[]
+}
+
+model GeneratedClip {
+  id               String               @id @default(cuid())
+  videoSourceId    String
+  clipSettingId    String?
+  title            String
+  description      String
+  thumbnail        String
+  thumbnailUrl     String?
+  duration         Int
+  viralScore       Int
+  outputFileUrl    String?
+  subtitleUrl      String?
+  startTime        Int?
+  endTime          Int?
+  processingStatus ProcessingStatus     @default(COMPLETED)
+  errorMessage     String?
+  tags             String[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  videoSource      VideoSource          @relation(fields: [videoSourceId], references: [id], onDelete: Cascade)
+  clipSetting      ClipSetting?         @relation(fields: [clipSettingId], references: [id], onDelete: SetNull)
+  postDetails      PostingClipDetail[]
+  contentItems     ContentItem[]
+  mediaJobs        MediaProcessingJob[]
+}
+
+model PostingSchedule {
+  id                   String                @id @default(cuid())
+  projectId            String?
+  contentItemId        String?
+  videoSourceId        String?
+  socialAccountId      String
+  destination          Platform
+  socialPlatform       SocialPlatform?
+  startDate            DateTime
+  scheduledAt          DateTime?
+  postingTime          String
+  postingEndTime       String
+  timezone             String                @default("Asia/Jakarta")
+  videosPerDay         Int
+  publishMode          PublishMode           @default(MANUAL)
+  status               ScheduleStatus        @default(DRAFT)
+  notes                String                @default("")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  project              Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  contentItem          ContentItem?          @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+  videoSource          VideoSource?          @relation(fields: [videoSourceId], references: [id], onDelete: SetNull)
+  socialAccount        SocialAccount         @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  clipDetails          PostingClipDetail[]
+  analytics            PostAnalytics[]
+  publishingChecklists PublishingChecklist[]
+  publishingJobs       PublishingJob[]
+}
+
+model PostingClipDetail {
+  id                String          @id @default(cuid())
+  postingScheduleId String
+  generatedClipId   String
+  title             String
+  description       String
+  tags              String[]
+  privacyStatus     PrivacyStatus   @default(PUBLIC)
+  notifySubscriber  Boolean         @default(true)
+  madeForKids       Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  postingSchedule   PostingSchedule @relation(fields: [postingScheduleId], references: [id], onDelete: Cascade)
+  generatedClip     GeneratedClip   @relation(fields: [generatedClipId], references: [id], onDelete: Cascade)
+}
+
+model SocialAccount {
+  id                     String                        @id @default(cuid())
+  projectId              String?
+  name                   String
+  platform               Platform?
+  socialPlatform         SocialPlatform?
+  handle                 String?
+  niche                  String?
+  status                 SocialConnectionStatus        @default(MANUAL)
+  uploadMethod           UploadMethod                  @default(MANUAL)
+  uploadMode             PublishMode                   @default(MANUAL)
+  authStatus             AuthStatus                    @default(NOT_CONNECTED)
+  platformAccountId      String?
+  platformAccountName    String?
+  platformAccountAvatar  String?
+  permissionStatus       String                        @default("NOT_REQUESTED")
+  accessTokenEncrypted   String?
+  refreshTokenEncrypted  String?
+  tokenExpiresAt         DateTime?
+  lastSyncAt             DateTime?
+  connectionNotes        String                        @default("")
+  loginNotes             String?
+  notes                  String                        @default("")
+  isActive               Boolean                       @default(true)
+  lastActivityAt         DateTime?
+  disabledAt             DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  project                Project?                      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  schedules              PostingSchedule[]
+  contentItems           ContentItem[]
+  analytics              PostAnalytics[]
+  platformSnapshots      PlatformPerformanceSnapshot[]
+  recommendationInsights RecommendationInsight[]
+  automationPlans        AutomationPlan[]
+  publishingJobs         PublishingJob[]
+  oauthCredentials       OAuthCredential[]
+}
+
+model CreativeAsset {
+  id              String          @id @default(cuid())
+  projectId       String?
+  generationJobId String?
+  type            CreativeType
+  title           String
+  prompt          String
+  style           String?
+  aspectRatio     String?
+  motionPrompt    String?
+  provider        AIProviderName?
+  thumbnail       String
+  previewUrl      String?
+  status          AssetStatus     @default(READY)
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  project         Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  generationJob   GenerationJob?  @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  contentItems    ContentItem[]
+}
+
+model AIProvider {
+  id             String               @id @default(cuid())
+  name           AIProviderName       @unique
+  apiKey         String?
+  status         ProviderStatus       @default(NOT_CONNECTED)
+  providerStatus AIProviderStatus     @default(NOT_CONFIGURED)
+  lastTestAt     DateTime?
+  lastTestStatus AIProviderStatus?
+  lastTestError  String?
+  mode           ProviderMode         @default(DUMMY)
+  dailyLimit     Int                  @default(0)
+  usedToday      Int                  @default(0)
+  resetTime      String               @default("00:00")
+  isActive       Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  jobs           GenerationJob[]
+  credentials    ProviderCredential[]
+}
+
+model ProviderCredential {
+  id              String     @id @default(cuid())
+  providerId      String
+  apiKeyEncrypted String     @default("")
+  label           String     @default("default")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  provider        AIProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model GenerationJob {
+  id            String          @id @default(cuid())
+  projectId     String?
+  providerId    String?
+  type          CreativeType
+  prompt        String
+  status        JobStatus       @default(COMPLETED)
+  resultAssetId String?
+  outputUrl     String?
+  duration      Int?
+  providerMode  ProviderMode    @default(DUMMY)
+  errorMessage  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  provider      AIProvider?     @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  assets        CreativeAsset[]
+}
+
+model MediaProcessingJob {
+  id              String           @id @default(cuid())
+  projectId       String?
+  videoSourceId   String?
+  generatedClipId String?
+  jobType         MediaJobType
+  status          ProcessingStatus @default(QUEUED)
+  progress        Int              @default(0)
+  inputUrl        String
+  outputUrl       String?
+  errorMessage    String?
+  logs            String[]         @default([])
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  videoSource     VideoSource?     @relation(fields: [videoSourceId], references: [id], onDelete: SetNull)
+  generatedClip   GeneratedClip?   @relation(fields: [generatedClipId], references: [id], onDelete: SetNull)
+}
+
+model ContentItem {
+  id                     String                  @id @default(cuid())
+  projectId              String?
+  socialAccountId        String?
+  creativeAssetId        String?
+  generatedClipId        String?
+  type                   ContentType
+  title                  String
+  description            String
+  caption                String                  @default("")
+  thumbnail              String
+  status                 ContentStatus           @default(DRAFT)
+  workflowStatus         ContentStatus           @default(DRAFT)
+  reviewNotes            String                  @default("")
+  rejectReason           String                  @default("")
+  reviewer               String?
+  approvedAt             DateTime?
+  approvedBy             String?
+  scheduledAt            DateTime?
+  publishedAt            DateTime?
+  failureReason          String                  @default("")
+  telegramChatId         String?
+  approvalMessageId      String?
+  approvalStatus         String                  @default("")
+  sourceType             String                  @default("")
+  linkedFromContentId    String?
+  parentAssetId          String?
+  assetStatus            LibraryAssetStatus      @default(ACTIVE)
+  versionNumber          Int                     @default(1)
+  isLatestVersion        Boolean                 @default(true)
+  versionNotes           String                  @default("")
+  archivedAt             DateTime?
+  trashedAt              DateTime?
+  viralScorePrediction   Int?
+  contentAngle           String                  @default("")
+  trendKeyword           String                  @default("")
+  trendPlatform          SocialPlatform?
+  fypScore               Int?
+  hook                   String                  @default("")
+  cta                    String                  @default("")
+  targetAudience         String                  @default("")
+  editingStyle           String                  @default("")
+  suggestedDuration      Int?
+  notes                  String                  @default("")
+  platform               SocialPlatform?
+  tags                   String[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  project                Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  socialAccount          SocialAccount?          @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  creativeAsset          CreativeAsset?          @relation(fields: [creativeAssetId], references: [id], onDelete: SetNull)
+  generatedClip          GeneratedClip?          @relation(fields: [generatedClipId], references: [id], onDelete: SetNull)
+  schedules              PostingSchedule[]
+  analytics              PostAnalytics[]
+  approvalHistory        ApprovalHistory[]
+  recommendationInsights RecommendationInsight[]
+  publishingChecklists   PublishingChecklist[]
+  publishingJobs         PublishingJob[]
+  collectionItems        AssetCollectionItem[]
+  agentTasks             AgentTask[]
+  agentRecommendations   AgentRecommendation[]
+  telegramApprovalLogs   TelegramApprovalLog[]
+  parentAsset            ContentItem?            @relation("ContentItemVersions", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  versions               ContentItem[]           @relation("ContentItemVersions")
+}
+
+model AIAgent {
+  id              String                @id @default(cuid())
+  name            String
+  role            AgentRole
+  description     String
+  status          AgentStatus           @default(ACTIVE)
+  lastRunAt       DateTime?
+  totalTasks      Int                   @default(0)
+  successRate     Float                 @default(96)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  tasks           AgentTask[]
+  recommendations AgentRecommendation[]
+  automationPlans AutomationPlan[]
+}
+
+model AgentTask {
+  id            String          @id @default(cuid())
+  agentId       String
+  projectId     String?
+  contentItemId String?
+  taskType      AgentTaskType
+  title         String
+  description   String
+  status        AgentTaskStatus @default(COMPLETED)
+  result        String          @default("")
+  priority      AgentPriority   @default(MEDIUM)
+  createdAt     DateTime        @default(now())
+  completedAt   DateTime?
+  agent         AIAgent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  contentItem   ContentItem?    @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+}
+
+model AgentRecommendation {
+  id                 String        @id @default(cuid())
+  agentId            String
+  projectId          String?
+  contentItemId      String?
+  title              String
+  description        String
+  recommendationType String
+  priority           AgentPriority @default(MEDIUM)
+  score              Int           @default(80)
+  status             String        @default("OPEN")
+  createdAt          DateTime      @default(now())
+  agent              AIAgent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  project            Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  contentItem        ContentItem?  @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+}
+
+model TelegramSetting {
+  id                String         @id @default(cuid())
+  botTokenEncrypted String         @default("")
+  chatId            String         @default("")
+  status            TelegramStatus @default(NOT_CONNECTED)
+  lastTestAt        DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+model GoogleOAuthSetting {
+  id                    String         @id @default(cuid())
+  clientIdEncrypted     String         @default("")
+  clientSecretEncrypted String         @default("")
+  redirectUri           String         @default("")
+  status                ProviderStatus @default(NOT_CONNECTED)
+  lastTestAt            DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model OAuthCredential {
+  id                    String        @id @default(cuid())
+  provider              String
+  socialAccountId       String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  scope                 String
+  expiresAt             DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  socialAccount         SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+}
+
+model OAuthProviderSetting {
+  id                    String         @id @default(cuid())
+  provider              String         @unique
+  clientIdEncrypted     String         @default("")
+  clientSecretEncrypted String         @default("")
+  redirectUri           String         @default("")
+  status                ProviderStatus @default(NOT_CONNECTED)
+  lastTestAt            DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model AutomationPlan {
+  id                   String               @id @default(cuid())
+  projectId            String?
+  socialAccountId      String?
+  title                String
+  description          String
+  suggestedPlatform    SocialPlatform?
+  suggestedPostingTime String
+  reason               String
+  priority             AgentPriority        @default(MEDIUM)
+  status               AutomationPlanStatus @default(DRAFT)
+  createdByAgentId     String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  project              Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  socialAccount        SocialAccount?       @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  createdByAgent       AIAgent?             @relation(fields: [createdByAgentId], references: [id], onDelete: SetNull)
+}
+
+model TelegramApprovalLog {
+  id                String                 @id @default(cuid())
+  contentItemId     String
+  action            TelegramApprovalAction
+  telegramMessageId String?
+  telegramChatId    String?
+  status            TelegramLogStatus      @default(PENDING)
+  responseBy        String?
+  responseAt        DateTime?
+  errorMessage      String?
+  createdAt         DateTime               @default(now())
+  contentItem       ContentItem            @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+model AssetCollection {
+  id          String                @id @default(cuid())
+  name        String
+  description String                @default("")
+  projectId   String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  project     Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  items       AssetCollectionItem[]
+}
+
+model AssetCollectionItem {
+  id            String          @id @default(cuid())
+  collectionId  String
+  contentItemId String
+  createdAt     DateTime        @default(now())
+  collection    AssetCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  contentItem   ContentItem     @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, contentItemId])
+}
+
+model ApprovalHistory {
+  id            String        @id @default(cuid())
+  contentItemId String
+  fromStatus    ContentStatus
+  toStatus      ContentStatus
+  note          String        @default("")
+  reason        String        @default("")
+  actionBy      String        @default("Admin")
+  createdAt     DateTime      @default(now())
+  contentItem   ContentItem   @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+}
+
+model PostAnalytics {
+  id                  String           @id @default(cuid())
+  projectId           String?
+  contentItemId       String
+  socialAccountId     String
+  postingScheduleId   String?
+  platform            SocialPlatform
+  postUrl             String           @default("")
+  views               Int              @default(0)
+  likes               Int              @default(0)
+  comments            Int              @default(0)
+  shares              Int              @default(0)
+  saves               Int              @default(0)
+  watchTime           Int              @default(0)
+  averageViewDuration Float            @default(0)
+  followersGained     Int              @default(0)
+  engagementRate      Float            @default(0)
+  postedAt            DateTime?
+  recordedAt          DateTime         @default(now())
+  notes               String           @default("")
+  capturedAt          DateTime         @default(now())
+  createdAt           DateTime         @default(now())
+  project             Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  contentItem         ContentItem      @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  socialAccount       SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  postingSchedule     PostingSchedule? @relation(fields: [postingScheduleId], references: [id], onDelete: SetNull)
+}
+
+model PlatformPerformanceSnapshot {
+  id              String         @id @default(cuid())
+  projectId       String?
+  socialAccountId String?
+  platform        SocialPlatform
+  views           Int            @default(0)
+  likes           Int            @default(0)
+  comments        Int            @default(0)
+  shares          Int            @default(0)
+  saves           Int            @default(0)
+  watchTime       Int            @default(0)
+  engagementRate  Float          @default(0)
+  snapshotDate    DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  project         Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+}
+
+model RecommendationInsight {
+  id              String         @id @default(cuid())
+  projectId       String?
+  socialAccountId String?
+  contentItemId   String?
+  insightType     String
+  title           String
+  description     String
+  score           Int
+  recommendation  String
+  priority        String
+  createdAt       DateTime       @default(now())
+  project         Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  socialAccount   SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  contentItem     ContentItem?   @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+}
+
+model PublishingChecklist {
+  id                String           @id @default(cuid())
+  contentItemId     String
+  postingScheduleId String?
+  assetChecked      Boolean          @default(false)
+  captionCopied     Boolean          @default(false)
+  hashtagCopied     Boolean          @default(false)
+  uploadedManually  Boolean          @default(false)
+  postUrlAdded      Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  contentItem       ContentItem      @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  postingSchedule   PostingSchedule? @relation(fields: [postingScheduleId], references: [id], onDelete: SetNull)
+}
+
+model PublishingJob {
+  id                 String              @id @default(cuid())
+  postingScheduleId  String
+  contentItemId      String
+  socialAccountId    String
+  platform           SocialPlatform
+  publishMode        PublishMode
+  status             PublishingJobStatus @default(READY_TO_POST)
+  providerJobId      String?
+  platformPostId     String?
+  platformPostUrl    String?
+  postUrl            String              @default("")
+  errorMessage       String?
+  retryCount         Int                 @default(0)
+  publishStartedAt   DateTime?
+  publishCompletedAt DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  postingSchedule    PostingSchedule     @relation(fields: [postingScheduleId], references: [id], onDelete: Cascade)
+  contentItem        ContentItem         @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  socialAccount      SocialAccount       @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  logs               PublishingLog[]
+}
+
+model PublishingLog {
+  id              String             @id @default(cuid())
+  publishingJobId String
+  level           PublishingLogLevel @default(INFO)
+  message         String
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  publishingJob   PublishingJob      @relation(fields: [publishingJobId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  message    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String
+  severity  String   @default("INFO")
+  source    String
+  status    String   @default("UNREAD")
+  actionUrl String?
+  createdAt DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+}
+
+model IntelligenceResult {
+  id             String                 @id @default(cuid())
+  searchRunId    String?
+  keyword        String
+  topic          String
+  platform       String
+  source         String
+  sourceUrl      String?
+  score          Int
+  confidence     Int
+  volumeLabel    String
+  trendDirection String
+  category       String
+  region         String
+  language       String
+  collectedAt    DateTime
+  rawData        Json?
+  isDemo         Boolean                @default(true)
+  notes          String                 @default("")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  searchRun      IntelligenceSearchRun? @relation(fields: [searchRunId], references: [id], onDelete: SetNull)
+  analyses       DataDrivenAnalysis[]
+
+  @@index([platform, collectedAt])
+  @@index([keyword, collectedAt])
+  @@index([searchRunId, collectedAt])
+}
+
+model IntelligenceSearchRun {
+  id          String               @id @default(cuid())
+  query       String
+  niche       String               @default("")
+  mode        String
+  platforms   String[]
+  region      String
+  language    String
+  timeRange   String
+  status      String
+  resultCount Int                  @default(0)
+  cacheKey    String               @unique
+  cachedUntil DateTime
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  results     IntelligenceResult[]
+
+  @@index([query, region, createdAt])
+  @@index([cachedUntil])
+}
+
+model DataDrivenAnalysis {
+  id               String              @id @default(cuid())
+  resultId         String?
+  keyword          String
+  mode             String
+  summary          String
+  trendStage       String
+  opportunityLevel String
+  riskLevel        String
+  score            Int
+  confidence       Int
+  analysis         Json
+  sourceBreakdown  Json
+  isDemo           Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  result           IntelligenceResult? @relation(fields: [resultId], references: [id], onDelete: SetNull)
+
+  @@index([resultId, createdAt])
+  @@index([keyword, createdAt])
+}
+
+model AffiliateProductInsight {
+  id                    String   @id @default(cuid())
+  productName           String
+  platform              String
+  category              String
+  trendScore            Int
+  competitionLevel      String
+  commissionEstimate    String
+  priceRange            String
+  contentPotentialScore Int
+  source                String
+  sourceUrl             String?
+  confidence            Int
+  collectedAt           DateTime
+  isDemo                Boolean  @default(true)
+  notes                 String   @default("")
+  rawData               Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([platform, collectedAt])
+  @@index([category, collectedAt])
+}
+
+model IntelligenceProviderSetting {
+  id              String    @id @default(cuid())
+  provider        String    @unique
+  apiKeyEncrypted String?
+  status          String    @default("MISSING")
+  lastError       String?
+  lastCheckedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model YouTubeQuotaLog {
+  id            String   @id @default(cuid())
+  endpoint      String
+  keyword       String
+  region        String
+  estimatedCost Int
+  status        String
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([endpoint, createdAt])
+}
+
+model SavedOpportunity {
+  id               String             @id @default(cuid())
+  title            String
+  type             String
+  source           String
+  sourceUrl        String?
+  platform         String
+  score            Int
+  confidence       Int
+  reason           String
+  notes            String             @default("")
+  isDemo           Boolean            @default(true)
+  status           String             @default("saved")
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  generatedContent GeneratedContent[]
+
+  @@index([type, createdAt])
+  @@index([status, createdAt])
+}
+
+model AffiliateCampaign {
+  id                    String             @id @default(cuid())
+  campaignName          String
+  productName           String
+  platform              String
+  category              String
+  trendScore            Int
+  competitionLevel      String
+  commissionEstimate    String
+  priceRange            String
+  contentPotentialScore Int
+  source                String
+  sourceUrl             String?
+  notes                 String             @default("")
+  isDemo                Boolean            @default(true)
+  status                String             @default("draft")
+  metadata              Json?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  generatedContent      GeneratedContent[]
+
+  @@index([status, createdAt])
+  @@index([platform, createdAt])
+}
+
+model GeneratedContent {
+  id            String             @id @default(cuid())
+  campaignId    String?
+  opportunityId String?
+  contentType   String
+  title         String
+  body          String
+  platform      String
+  tone          String
+  source        String
+  isDemo        Boolean            @default(true)
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  campaign      AffiliateCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  opportunity   SavedOpportunity?  @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, contentType])
+  @@index([opportunityId, contentType])
+}
+
+enum Platform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+}
+
+enum SocialPlatform {
+  TIKTOK
+  YOUTUBE_SHORTS
+  INSTAGRAM_REELS
+  FACEBOOK_REELS
+}
+
+enum PrivacyStatus {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum ContentMode {
+  CLIPPER
+  IMAGE_GENERATOR
+  AI_VIDEO_GENERATOR
+}
+
+enum CreativeType {
+  IMAGE
+  MOTION_IMAGE
+  AI_VIDEO
+}
+
+enum AssetStatus {
+  READY
+  PROCESSING
+  FAILED
+}
+
+enum LibraryAssetStatus {
+  ACTIVE
+  ARCHIVED
+  TRASHED
+}
+
+enum AgentRole {
+  CEO
+  RESEARCH
+  SCRIPT
+  CLIPPER
+  CREATIVE
+  SCHEDULER
+  ANALYST
+}
+
+enum AgentStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum AgentTaskType {
+  RESEARCH_TREND
+  GENERATE_CONTENT_IDEA
+  REVIEW_CONTENT
+  RECOMMEND_SCHEDULE
+  ANALYZE_PERFORMANCE
+}
+
+enum AgentTaskStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum AgentPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TelegramStatus {
+  CONNECTED
+  NOT_CONNECTED
+  ERROR
+}
+
+enum TelegramApprovalAction {
+  SENT_REVIEW
+  SENT_APPROVED
+  APPROVED
+  REJECTED
+  REVIEW
+  TEST
+}
+
+enum TelegramLogStatus {
+  PENDING
+  SENT
+  FAILED
+  RESPONDED
+}
+
+enum AutomationPlanStatus {
+  DRAFT
+  WAITING_APPROVAL
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+enum AIProviderName {
+  GEMINI_VEO
+  OPENAI_SORA
+  RUNWAY
+  PIKA
+  LUMA
+  MANUAL_UPLOAD
+}
+
+enum ProviderStatus {
+  CONNECTED
+  NOT_CONNECTED
+}
+
+enum ProviderMode {
+  DUMMY
+  REAL
+}
+
+enum AIProviderStatus {
+  NOT_CONFIGURED
+  CONFIGURED
+  READY
+  ERROR
+  DUMMY
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum VideoSourceType {
+  URL
+  UPLOAD
+}
+
+enum ProcessingStatus {
+  QUEUED
+  PROCESSING
+  GENERATING_SUBTITLE
+  GENERATING_THUMBNAIL
+  COMPLETED
+  FAILED
+}
+
+enum MediaJobType {
+  UPLOAD
+  CLIP_PROCESSING
+  THUMBNAIL
+  SUBTITLE
+}
+
+enum SocialConnectionStatus {
+  CONNECTED
+  MANUAL
+  NOT_CONNECTED
+  DISABLED
+}
+
+enum AuthStatus {
+  NOT_CONNECTED
+  CONNECTED
+  EXPIRED
+  ERROR
+}
+
+enum UploadMethod {
+  MANUAL
+  API
+  BROWSER_AUTOMATION
+}
+
+enum ScheduleStatus {
+  DRAFT
+  SCHEDULED
+  READY_TO_POST
+  PUBLISHING
+  POSTED
+  FAILED
+  CANCELED
+}
+
+enum PublishMode {
+  MANUAL
+  SEMI_AUTO
+  AUTO
+}
+
+enum PublishingJobStatus {
+  READY_TO_POST
+  PUBLISHING
+  POSTED
+  FAILED
+  CANCELED
+}
+
+enum PublishingLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum ContentType {
+  CLIP
+  IMAGE
+  MOTION_IMAGE
+  AI_VIDEO
+  SCHEDULED_POST
+  IDEA
+  SCRIPT
+  CLIP_PLAN
+}
+
+enum ContentStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  SCHEDULED
+  POSTED
+  REJECTED
+  FAILED
+  READY
+}

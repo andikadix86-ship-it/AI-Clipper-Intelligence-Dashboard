@@ -1,0 +1,4 @@
+ALTER TABLE "ContentItem"
+  ADD COLUMN IF NOT EXISTS "linkedFromContentId" TEXT,
+  ADD COLUMN IF NOT EXISTS "viralScorePrediction" INTEGER,
+  ADD COLUMN IF NOT EXISTS "contentAngle" TEXT NOT NULL DEFAULT '';
