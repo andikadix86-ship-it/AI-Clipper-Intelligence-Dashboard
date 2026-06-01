@@ -223,6 +223,34 @@ export async function POST(request: Request) {
       outputSource,
       errorMessage
     });
-    return NextResponse.json({ error: "Generation result could not be saved to Content Library.", detail: errorMessage }, { status: 500 });
+    const warning = `${generationError ? `${generationError} ` : ""}Preview generated, but database is unavailable. The asset was not saved to Content Library.`;
+    return NextResponse.json({
+      asset: {
+        id: `fallback-${Date.now()}`,
+        type: body.type,
+        title: providerResult.title,
+        prompt: originalPrompt,
+        style: body.style,
+        aspectRatio: body.aspectRatio,
+        motionPrompt: body.motionPrompt,
+        provider: requestedProvider,
+        thumbnail: providerResult.thumbnail ?? outputUrl ?? "",
+        previewUrl: providerResult.previewUrl,
+        status: "READY",
+        model,
+        generationType: body.type,
+        mode: providerResult.mode,
+        isDummy: true,
+        outputSource: "dummy",
+        finalPrompt,
+        generationStatus: "PERSISTENCE_FALLBACK",
+        warning
+      },
+      job: { status: "FALLBACK_PREVIEW", progress: 100, errorMessage: warning },
+      mode: "DUMMY",
+      source: "fallback",
+      warning,
+      detail: errorMessage
+    });
   }
 }

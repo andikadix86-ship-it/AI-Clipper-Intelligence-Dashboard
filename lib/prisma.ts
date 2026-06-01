@@ -16,7 +16,7 @@ const pgPool =
     connectionString,
     max: 5,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 10_000,
+    connectionTimeoutMillis: process.env.DATABASE_URL ? 10_000 : 1_000,
     ssl: {
       rejectUnauthorized: false
     }

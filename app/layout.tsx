@@ -3,13 +3,13 @@ import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
-  title: "AI Clipper Intelligence Dashboard",
-  description: "Generate, analyze, and schedule viral short clips."
+  title: "FVN AI Studio",
+  description: "AI-powered content intelligence workspace by Fatih Vistara Niaga."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="id">
       <body>
         <AppShell>{children}</AppShell>
       </body>

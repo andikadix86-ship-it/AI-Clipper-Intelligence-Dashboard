@@ -24,9 +24,7 @@ export async function GET() {
 
     return NextResponse.json({ items: schedules.map(mapPublishingItem) });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Publishing queue could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[publishing] Database unavailable while loading publishing queue.", error);
+    return NextResponse.json({ items: [], source: "fallback", message: "Database unavailable, using empty publishing queue." });
   }
 }

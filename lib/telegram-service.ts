@@ -15,7 +15,7 @@ export function mapTelegramSetting(setting: { id: string; botTokenEncrypted: str
     id: setting.id,
     botTokenMasked: maskToken(setting.botTokenEncrypted),
     chatId: setting.chatId,
-    status: setting.status,
+    status: setting.status === "NOT_CONNECTED" ? "NOT_CONFIGURED" : setting.status,
     statusLabel: setting.status === "CONNECTED" ? "Connected" : setting.status === "ERROR" ? "Error" : "Not configured",
     lastTestAt: setting.lastTestAt?.toISOString()
   };
@@ -49,7 +49,13 @@ export function mapTelegramLog(log: {
 
 export async function getTelegramSetting() {
   const setting = await prisma.telegramSetting.findFirst({ orderBy: { updatedAt: "desc" } });
-  return setting ? mapTelegramSetting(setting) : { botTokenMasked: "", chatId: "", status: "NOT_CONNECTED", statusLabel: "Not configured" };
+  if (setting) return mapTelegramSetting(setting);
+  return {
+    botTokenMasked: process.env.TELEGRAM_BOT_TOKEN ? maskSecret(process.env.TELEGRAM_BOT_TOKEN) : "",
+    chatId: process.env.TELEGRAM_CHAT_ID ?? "",
+    status: "NOT_CONFIGURED" as const,
+    statusLabel: "Not configured"
+  };
 }
 
 export async function saveTelegramSetting(input: { botToken?: string; chatId?: string }) {

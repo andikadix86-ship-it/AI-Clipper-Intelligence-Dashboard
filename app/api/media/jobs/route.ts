@@ -9,9 +9,7 @@ export async function GET() {
     const jobs = await prisma.mediaProcessingJob.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
     return NextResponse.json({ jobs: jobs.map(mapMediaJob) });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Media jobs could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[media] Database unavailable while loading media jobs.", error);
+    return NextResponse.json({ jobs: [], source: "fallback", message: "Database unavailable, using empty media job list." });
   }
 }

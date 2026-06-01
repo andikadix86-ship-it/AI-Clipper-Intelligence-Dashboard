@@ -22,10 +22,8 @@ export async function GET() {
       }))
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Collections could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[library] Database unavailable while loading collections.", error);
+    return NextResponse.json({ collections: [], source: "fallback", message: "Database unavailable, using empty collection list." });
   }
 }
 

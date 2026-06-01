@@ -10,9 +10,7 @@ export async function GET() {
       items: items.filter((item) => item.workflowStatus === "REVIEW")
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Approval queue could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[approval] Database unavailable while loading approval queue.", error);
+    return NextResponse.json({ items: [], source: "fallback", message: "Database unavailable, using empty approval queue." });
   }
 }

@@ -1,6 +1,7 @@
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { withTimeout } from "@/lib/db-timeout";
 import { prisma } from "@/lib/prisma";
+import { defaultProviders } from "@/lib/dummy-creative";
 import { providerStatusLabel, resolvedProviderStatus } from "@/lib/provider-status";
 
 export const runtime = "nodejs";
@@ -10,6 +11,30 @@ function hasEnvironmentKey(provider: string) {
   if (provider === "OPENAI_SORA") return Boolean(process.env.OPENAI_API_KEY);
   if (provider === "GEMINI_VEO") return Boolean(process.env.GEMINI_API_KEY);
   return false;
+}
+
+function fallbackRows() {
+  return [
+    ...defaultProviders.map((provider) => ({
+      provider: provider.name,
+      status: hasEnvironmentKey(provider.name) ? "Ready" : "Provider belum dikonfigurasi",
+      providerStatus: hasEnvironmentKey(provider.name) ? "READY" : "NOT_CONFIGURED",
+      isActive: provider.isActive,
+      hasCredential: hasEnvironmentKey(provider.name),
+      errorMessage: "",
+      dailyLimit: provider.dailyLimit,
+      usedToday: provider.usedToday,
+      mode: provider.mode
+    })),
+    ...["Telegram Bot", "YouTube OAuth", "TIKTOK OAuth", "META OAuth"].map((provider) => ({
+      provider,
+      status: "Provider belum dikonfigurasi",
+      errorMessage: "",
+      dailyLimit: 0,
+      usedToday: 0,
+      mode: "DUMMY"
+    }))
+  ];
 }
 
 export async function GET() {
@@ -92,6 +117,8 @@ export async function GET() {
     ];
     return apiSuccess("Provider status loaded.", { providers: rows }, { providers: rows });
   } catch (error) {
-    return apiError("Provider status could not be loaded.", 500, error);
+    console.error("[providers] Database unavailable while loading provider status.", error);
+    const providers = fallbackRows();
+    return apiSuccess("Database unavailable, using provider status fallback.", { providers }, { providers });
   }
 }

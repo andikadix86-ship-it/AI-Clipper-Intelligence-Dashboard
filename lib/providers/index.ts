@@ -46,13 +46,12 @@ function envApiKey(providerName: AIProviderName) {
 }
 
 export async function resolveProviderCredential(providerName: AIProviderName) {
-  const provider = await withTimeout(
-    prisma.aIProvider.findUnique({
-      where: { name: providerName },
-      include: { credentials: { orderBy: { updatedAt: "desc" }, take: 1 } }
-    }),
-    5000
-  );
+  let provider: Awaited<ReturnType<typeof loadProviderCredential>> = null;
+  try {
+    provider = await loadProviderCredential(providerName);
+  } catch (error) {
+    console.error("[providers] Database unavailable while resolving provider credential.", error);
+  }
   const databaseKey = decodeApiKey(provider?.credentials[0]?.apiKeyEncrypted ?? provider?.apiKey);
   const environmentKey = envApiKey(providerName);
   const source: ProviderCredentialSource = databaseKey ? "database" : environmentKey ? "env" : "none";
@@ -69,6 +68,16 @@ export async function resolveProviderCredential(providerName: AIProviderName) {
   });
 
   return { provider, apiKey, source };
+}
+
+function loadProviderCredential(providerName: AIProviderName) {
+  return withTimeout(
+    prisma.aIProvider.findUnique({
+      where: { name: providerName },
+      include: { credentials: { orderBy: { updatedAt: "desc" }, take: 1 } }
+    }),
+    5000
+  );
 }
 
 export async function getProviderRuntime(providerName: AIProviderName, requestedMode?: ProviderMode) {

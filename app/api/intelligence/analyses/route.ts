@@ -1,7 +1,8 @@
-import { apiError, apiSuccess } from "@/lib/api-response";
+import { apiSuccess } from "@/lib/api-response";
 import { listDataDrivenAnalyses } from "@/lib/intelligence/analysis-engine/repository";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
     });
     return apiSuccess("Data-driven analyses loaded.", { analyses }, { analyses });
   } catch (error) {
-    return apiError("Data-driven analyses could not be loaded.", 500, error);
+    console.error("[intelligence] Database unavailable while loading analyses.", error);
+    return apiSuccess("Database unavailable, using empty analysis list.", { analyses: [], source: "fallback" }, { analyses: [], source: "fallback" });
   }
 }
-

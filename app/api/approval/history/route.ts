@@ -27,9 +27,7 @@ export async function GET(request: Request) {
       }))
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Approval history could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[approval] Database unavailable while loading approval history.", error);
+    return NextResponse.json({ history: [], source: "fallback", message: "Database unavailable, using empty approval history." });
   }
 }

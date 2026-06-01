@@ -11,7 +11,16 @@ export async function GET() {
     const settings = await Promise.all(providers.map((provider) => getOAuthProviderSetting(provider)));
     return apiSuccess("OAuth provider settings loaded.", { settings }, { settings });
   } catch (error) {
-    return apiError("OAuth provider settings could not be loaded.", 500, error);
+    console.error("[settings] Database unavailable while loading OAuth provider settings.", error);
+    const settings = providers.map((provider) => {
+      const prefix = provider === "TIKTOK" ? "TIKTOK" : "META";
+      const clientId = process.env[provider === "TIKTOK" ? "TIKTOK_CLIENT_KEY" : "META_APP_ID"];
+      const clientSecret = process.env[`${prefix}_${provider === "TIKTOK" ? "CLIENT_SECRET" : "APP_SECRET"}`];
+      const redirectUri = process.env[`${prefix}_REDIRECT_URI`] ?? "";
+      const connected = Boolean(clientId && clientSecret && redirectUri);
+      return { provider, clientIdMasked: clientId ? "env_***set" : "", clientSecretMasked: clientSecret ? "env_***set" : "", redirectUri, status: connected ? "CONNECTED" : "NOT_CONNECTED", statusLabel: connected ? "Connected" : "Provider belum dikonfigurasi" };
+    });
+    return apiSuccess("Database unavailable, using OAuth provider fallback.", { settings }, { settings });
   }
 }
 

@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import clsx from "clsx";
-import { CheckCircle2, Clapperboard, ImageIcon, Loader2, Palette, Play, RefreshCcw, Sparkles, Wand2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clapperboard, ImageIcon, Loader2, Palette, Play, RefreshCcw, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { providerLabels } from "@/lib/dummy-creative";
 import type { StudioInsightContext } from "@/lib/intelligence/action-flow";
@@ -68,32 +68,39 @@ export default function CreativeStudioPage() {
     setLoading(true);
     setMessage(null);
     setJob({ status: "PROCESSING", progress: 35 });
-    const response = await fetch("/api/creative/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: activeTab,
-        projectId,
-        prompt,
-        style,
-        aspectRatio,
-        motionPrompt: activeTab === "MOTION_IMAGE" ? motionPrompt : undefined,
-        provider,
-        mode,
-        campaignId: insightContext?.campaignId,
-        generatedContentId: insightContext?.generatedContentId
-      })
-    });
-    const data = await response.json();
-    setLoading(false);
-    if (!response.ok) {
-      setMessage(data.error ?? "Generation failed.");
-      setJob({ status: "FAILED", progress: 100, errorMessage: data.error ?? "Generation failed." });
-      return;
+    try {
+      const response = await fetch("/api/creative/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: activeTab,
+          projectId,
+          prompt,
+          style,
+          aspectRatio,
+          motionPrompt: activeTab === "MOTION_IMAGE" ? motionPrompt : undefined,
+          provider,
+          mode,
+          campaignId: insightContext?.campaignId,
+          generatedContentId: insightContext?.generatedContentId
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setMessage(data.error ?? "Generation failed.");
+        setJob({ status: "FAILED", progress: 100, errorMessage: data.error ?? "Generation failed." });
+        return;
+      }
+      setAsset(data.asset);
+      setJob(data.job ?? { id: data.jobId, status: "COMPLETED", progress: 100, errorMessage: data.warning });
+      setMessage(data.warning ?? data.relevanceWarning ?? `Asset generated in ${data.mode ?? mode} mode and saved to Content Library.`);
+    } catch {
+      const errorMessage = "Provider request failed. Dummy preview remains available; retry when the connection is stable.";
+      setMessage(errorMessage);
+      setJob({ status: "FAILED", progress: 100, errorMessage });
+    } finally {
+      setLoading(false);
     }
-    setAsset(data.asset);
-    setJob(data.job ?? { id: data.jobId, status: "COMPLETED", progress: 100, errorMessage: data.warning });
-    setMessage(data.warning ?? data.relevanceWarning ?? `Asset generated in ${data.mode ?? mode} mode and saved to Content Library.`);
   }
 
   return (
@@ -231,7 +238,7 @@ export default function CreativeStudioPage() {
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${job?.progress ?? 0}%` }} />
               </div>
-              {job?.errorMessage ? <p className="mt-3 text-xs text-amber-200">{job.errorMessage}</p> : null}
+              {job?.errorMessage ? <ProviderErrorCard message={job.errorMessage} /> : null}
               {asset ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-100">
@@ -297,6 +304,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-2 block text-sm font-medium text-slate-300">{label}</span>
       {children}
     </label>
+  );
+}
+
+function ProviderErrorCard({ message }: { message: string }) {
+  return (
+    <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.07] p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-amber-100"><AlertTriangle className="h-4 w-4" /> Provider fallback active</div>
+      <p className="mt-2 text-xs leading-5 text-amber-100/80">{message}</p>
+      <p className="mt-2 text-[11px] leading-5 text-slate-400">UI tetap aktif. Gunakan preview dummy atau coba ulang setelah provider dan database tersedia.</p>
+    </div>
   );
 }
 

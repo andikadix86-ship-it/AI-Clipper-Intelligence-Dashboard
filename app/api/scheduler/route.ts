@@ -18,9 +18,7 @@ export async function GET() {
 
     return NextResponse.json({ schedules: schedules.map((schedule) => mapSchedule(schedule)) });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Schedules could not be loaded from Supabase." },
-      { status: 500 }
-    );
+    console.error("[scheduler] Database unavailable while loading schedules.", error);
+    return NextResponse.json({ schedules: [], source: "fallback", message: "Database unavailable, using empty schedule list." });
   }
 }

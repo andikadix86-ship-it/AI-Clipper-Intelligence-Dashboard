@@ -8,9 +8,7 @@ export async function GET() {
     const recommendations = await getRecommendationInsights();
     return NextResponse.json({ recommendations });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Recommendations could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[recommendations] Database unavailable while loading recommendations.", error);
+    return NextResponse.json({ recommendations: [], source: "fallback", message: "Database unavailable, using empty recommendation list." });
   }
 }

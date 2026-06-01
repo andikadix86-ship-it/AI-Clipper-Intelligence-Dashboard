@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withTimeout } from "@/lib/db-timeout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +14,9 @@ export async function GET() {
   let databaseMessage = "Database reachable.";
 
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await withTimeout(prisma.$queryRaw`SELECT 1`);
   } catch (error) {
+    console.error("[health] Database connectivity check failed.", error);
     databaseStatus = "error";
     databaseMessage = error instanceof Error ? error.message : "Database health check failed.";
   }

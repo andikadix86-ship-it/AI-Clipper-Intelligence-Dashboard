@@ -1,6 +1,7 @@
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getIntelligenceProviderSettings, saveYouTubeDataApiKey } from "@/lib/intelligence/provider-settings";
+import { getRedditOAuthStatus } from "@/lib/intelligence/reddit-oauth";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,15 @@ export async function GET() {
     const settings = await getIntelligenceProviderSettings();
     return apiSuccess("Intelligence provider settings loaded.", { settings }, { settings });
   } catch (error) {
-    return apiError("Intelligence provider settings could not be loaded.", 500, error);
+    console.error("[settings] Database unavailable while loading intelligence provider settings.", error);
+    const youtubeKey = process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_DATA_API_KEY || "";
+    const reddit = getRedditOAuthStatus();
+    const settings = [
+      { provider: "YOUTUBE_DATA_API", label: "YouTube Data API", status: youtubeKey ? "CONNECTED" : "MISSING", apiKeyMasked: youtubeKey ? "env_***set" : "", credentialSource: youtubeKey ? "env" : "none", lastError: youtubeKey ? "" : "Provider belum dikonfigurasi" },
+      { provider: "GOOGLE_TRENDS", label: "Google Trends", status: "DEMO", apiKeyMasked: "", credentialSource: "demo", lastError: "" },
+      { provider: "REDDIT_OAUTH", label: "Reddit OAuth", status: reddit.status, apiKeyMasked: reddit.clientIdMasked, credentialSource: "env", lastError: reddit.status === "READY" ? "" : "Provider belum dikonfigurasi" }
+    ];
+    return apiSuccess("Database unavailable, using intelligence provider fallback.", { settings }, { settings });
   }
 }
 

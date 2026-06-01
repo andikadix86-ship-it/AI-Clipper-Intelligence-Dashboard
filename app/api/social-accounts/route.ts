@@ -43,10 +43,8 @@ export async function GET() {
     const countMap = new Map(contentByProject.map((item) => [item.projectId, item._count._all]));
     return NextResponse.json({ accounts: accounts.map((account) => mapSocialAccount(account, countMap)) });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Social accounts could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[social-accounts] Database unavailable while loading social accounts.", error);
+    return NextResponse.json({ accounts: [], source: "fallback", message: "Database unavailable, using empty social account list." });
   }
 }
 

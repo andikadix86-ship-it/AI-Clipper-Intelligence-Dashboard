@@ -9,7 +9,15 @@ export async function GET() {
     const setting = await getGoogleOAuthSetting();
     return apiSuccess("Google OAuth settings loaded.", { setting }, { setting });
   } catch (error) {
-    return apiError("Google OAuth settings could not be loaded.", 500, error);
+    console.error("[settings] Database unavailable while loading Google OAuth settings.", error);
+    const setting = {
+      clientIdMasked: process.env.GOOGLE_CLIENT_ID ? "env_***set" : "",
+      clientSecretMasked: process.env.GOOGLE_CLIENT_SECRET ? "env_***set" : "",
+      redirectUri: process.env.GOOGLE_REDIRECT_URI ?? "",
+      status: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? "CONNECTED" : "NOT_CONNECTED",
+      statusLabel: process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? "Connected" : "Provider belum dikonfigurasi"
+    };
+    return apiSuccess("Database unavailable, using Google OAuth fallback.", { setting }, { setting });
   }
 }
 

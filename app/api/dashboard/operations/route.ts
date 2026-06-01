@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withTimeout } from "@/lib/db-timeout";
 
 export const runtime = "nodejs";
+
+const fallbackOperations = {
+  operations: { reviewQueue: 0, approvalQueue: 0, scheduledToday: 0, failedPosting: 0 },
+  analytics: { publishedContent: 0, scheduledContent: 0, approvalPending: 0, failedContent: 0 },
+  aiTeam: [],
+  notifications: { unreadNotifications: 0, providerWarnings: 0, recommendationsReady: 0 },
+  recentActivities: [],
+  source: "fallback",
+  message: "Database unavailable, using empty dashboard summary."
+};
 
 export async function GET() {
   const now = new Date();
@@ -11,7 +22,7 @@ export async function GET() {
   endOfDay.setDate(endOfDay.getDate() + 1);
 
   try {
-    const [reviewQueue, approvalQueue, scheduledToday, failedPosting, publishedContent, scheduledContent, agents, activities, unreadNotifications, providerWarnings, recommendationsReady] = await Promise.all([
+    const [reviewQueue, approvalQueue, scheduledToday, failedPosting, publishedContent, scheduledContent, agents, activities, unreadNotifications, providerWarnings, recommendationsReady] = await withTimeout(Promise.all([
       prisma.contentItem.count({ where: { workflowStatus: "DRAFT" } }),
       prisma.contentItem.count({ where: { workflowStatus: "REVIEW" } }),
       prisma.postingSchedule.count({
@@ -28,7 +39,7 @@ export async function GET() {
       prisma.notification.count({ where: { status: "UNREAD" } }),
       prisma.notification.count({ where: { status: "UNREAD", type: { in: ["PROVIDER_QUOTA_LIMITED", "API_KEY_MISSING", "DUMMY_FALLBACK"] } } }),
       prisma.notification.count({ where: { status: "UNREAD", type: "RECOMMENDATION_READY" } })
-    ]);
+    ]));
 
     return NextResponse.json({
       operations: { reviewQueue, approvalQueue, scheduledToday, failedPosting },
@@ -38,12 +49,11 @@ export async function GET() {
         status: agent.status === "DISABLED" ? "Offline" : agent.status === "PAUSED" ? "Waiting" : agent.lastRunAt && Date.now() - agent.lastRunAt.getTime() < 5 * 60 * 1000 ? "Working" : "Active"
       })),
       notifications: { unreadNotifications, providerWarnings, recommendationsReady },
-      recentActivities: activities.map((item) => item.message)
+      recentActivities: activities.map((item) => item.message),
+      source: "database"
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Dashboard operations could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[dashboard] Database unavailable while loading operations summary.", error);
+    return NextResponse.json(fallbackOperations);
   }
 }

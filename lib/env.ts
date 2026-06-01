@@ -28,7 +28,7 @@ function requireEnv(name: "DATABASE_URL" | "DIRECT_URL") {
 }
 
 export function getDatabaseUrl() {
-  return requireEnv("DATABASE_URL");
+  return process.env.DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:6543/postgres?connection_limit=1";
 }
 
 export function getServerEnv(): ServerEnv {

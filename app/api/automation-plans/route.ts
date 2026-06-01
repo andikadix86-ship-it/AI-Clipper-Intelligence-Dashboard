@@ -7,9 +7,7 @@ export async function GET() {
   try {
     return NextResponse.json({ plans: await getAutomationPlans() });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Automation plans could not be loaded." },
-      { status: 500 }
-    );
+    console.error("[automation-plans] Database unavailable while loading plans.", error);
+    return NextResponse.json({ plans: [], source: "fallback", message: "Database unavailable, using empty automation plan list." });
   }
 }
