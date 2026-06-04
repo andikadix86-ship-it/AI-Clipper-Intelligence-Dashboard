@@ -3,14 +3,15 @@ import { withTimeout } from "@/lib/db-timeout";
 import { prisma } from "@/lib/prisma";
 import { defaultProviders } from "@/lib/dummy-creative";
 import { providerStatusLabel, resolvedProviderStatus } from "@/lib/provider-status";
+import { providerEnvironmentKey } from "@/lib/providers";
+import { resolveTelegramRuntimeConfig } from "@/lib/telegram-service";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function hasEnvironmentKey(provider: string) {
-  if (provider === "OPENAI_SORA") return Boolean(process.env.OPENAI_API_KEY);
-  if (provider === "GEMINI_VEO") return Boolean(process.env.GEMINI_API_KEY);
-  return false;
+  return Boolean(providerEnvironmentKey(provider as Parameters<typeof providerEnvironmentKey>[0]));
 }
 
 function fallbackRows() {
@@ -24,7 +25,7 @@ function fallbackRows() {
       errorMessage: "",
       dailyLimit: provider.dailyLimit,
       usedToday: provider.usedToday,
-      mode: provider.mode
+      mode: hasEnvironmentKey(provider.name) ? "REAL" : provider.mode
     })),
     ...["Telegram Bot", "YouTube OAuth", "TIKTOK OAuth", "META OAuth"].map((provider) => ({
       provider,
@@ -53,6 +54,7 @@ export async function GET() {
       ]),
       8000
     );
+    const telegramRuntime = await resolveTelegramRuntimeConfig(telegram);
 
     const rows = [
       ...providers.map((provider) => {
@@ -86,12 +88,12 @@ export async function GET() {
       }),
       {
         provider: "Telegram Bot",
-        status: telegram?.status === "CONNECTED" ? "Ready" : telegram?.status === "ERROR" ? "Error" : "Not Configured",
+        status: telegram?.status === "CONNECTED" ? "Ready" : telegram?.status === "ERROR" ? "Error" : telegramRuntime.configured ? "Configured" : "Not Configured",
         lastTest: telegram?.lastTestAt?.toISOString(),
         errorMessage: "",
         dailyLimit: 0,
         usedToday: 0,
-        mode: telegram?.status === "CONNECTED" ? "REAL" : "DUMMY"
+        mode: telegramRuntime.configured ? "REAL" : "DUMMY"
       },
       {
         provider: "YouTube OAuth",
@@ -117,8 +119,11 @@ export async function GET() {
     ];
     return apiSuccess("Provider status loaded.", { providers: rows }, { providers: rows });
   } catch (error) {
-    console.error("[providers] Database unavailable while loading provider status.", error);
-    const providers = fallbackRows();
+    serverLogger.warn("providers.status.database_fallback", undefined, error);
+    const telegramRuntime = await resolveTelegramRuntimeConfig();
+    const providers = fallbackRows().map((provider) => provider.provider === "Telegram Bot" && telegramRuntime.configured
+      ? { ...provider, status: "Configured", mode: "REAL" }
+      : provider);
     return apiSuccess("Database unavailable, using provider status fallback.", { providers }, { providers });
   }
 }

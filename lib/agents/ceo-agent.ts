@@ -1,0 +1,10 @@
+import type { AgentName, CeoExecutionPlan, OrchestrationInput } from "./orchestration-types";
+export function createCeoExecutionPlan(input: OrchestrationInput): CeoExecutionPlan {
+  const agents: AgentName[] = ["CEO Agent", "Research Agent", "Creator Agent"];
+  if (input.transcript?.trim() || /clip|video|podcast|webinar/i.test(`${input.contentType} ${input.objective}`)) agents.push("Clipper Agent");
+  if (input.productName?.trim() || input.productCategory?.trim() || /affiliate|product|produk|campaign|commission/i.test(`${input.niche} ${input.objective}`)) agents.push("Affiliate Agent");
+  agents.push("Policy Agent", "Publishing Agent");
+  if (input.metrics && Object.values(input.metrics).some((value) => typeof value === "number")) agents.push("Analytics Agent");
+  const objective: Record<AgentName, string> = { "CEO Agent": "Koordinasikan workflow dan recommendation final.", "Research Agent": "Hasilkan Intelligence Brief.", "Creator Agent": "Buat content package dari research.", "Clipper Agent": "Analisis source dan rekomendasikan clip.", "Affiliate Agent": "Nilai produk dan susun campaign.", "Policy Agent": "Review originality, disclosure, dan safety.", "Publishing Agent": "Siapkan metadata, approval, dan export bundle.", "Analytics Agent": "Baca metrics dan simpan learning loop." };
+  return { execution_plan: agents.map((agent, index) => ({ step: index + 1, agent, objective: objective[agent] })), selected_agents: agents, priority_order: agents, expected_output: ["Intelligence Brief", "Content Package", "Policy Review", "Publishing Package", ...(agents.includes("Clipper Agent") ? ["Clip Plan"] : []), ...(agents.includes("Affiliate Agent") ? ["Affiliate Plan"] : []), ...(agents.includes("Analytics Agent") ? ["Performance Recommendation"] : [])], risks: ["Provider eksternal dapat timeout sehingga fallback harus tetap aktif.", "Approval manual diperlukan sebelum export penting."], next_steps: ["Jalankan research.", "Generate content package.", "Review policy.", "Siapkan approval dan export manual."] };
+}

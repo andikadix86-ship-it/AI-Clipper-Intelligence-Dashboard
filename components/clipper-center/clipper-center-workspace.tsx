@@ -8,6 +8,7 @@ import { PlatformOptimizationPanel } from "@/components/clipper-center/platform-
 import { PolicyGuardrail } from "@/components/clipper-center/policy-guardrail";
 import { RecentClipProjects } from "@/components/clipper-center/recent-clip-projects";
 import { SourcePanel } from "@/components/clipper-center/source-panel";
+import { ClipperEnginePanel } from "@/components/clipper-center/clipper-engine-panel";
 
 export function ClipperCenterWorkspace() {
   const [analyzed, setAnalyzed] = useState(false);
@@ -15,6 +16,7 @@ export function ClipperCenterWorkspace() {
   return (
     <div className="space-y-6">
       <ClipperHeader />
+      <ClipperEnginePanel />
       <SourcePanel analyzed={analyzed} onAnalyze={() => setAnalyzed(true)} />
       <ClipIntelligenceGrid analyzed={analyzed} />
       <ClipperWorkflow activeStage={analyzed ? 2 : 0} />

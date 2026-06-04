@@ -13,7 +13,7 @@ export async function GET() {
     const data = projects.length ? projects : dummyProjects;
     return apiSuccess("Projects loaded.", { projects: data }, { projects: data });
   } catch {
-    return apiSuccess("Projects loaded from dummy fallback.", { projects: dummyProjects }, { projects: dummyProjects });
+    return apiSuccess("Projects loaded from dummy fallback.", { projects: dummyProjects, source: "fallback" }, { projects: dummyProjects, source: "fallback" });
   }
 }
 

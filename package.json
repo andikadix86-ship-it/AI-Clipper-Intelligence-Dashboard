@@ -8,6 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "healthcheck": "node scripts/healthcheck.cjs",
+    "test:integration": "node --test tests/core-engine.integration.test.cjs",
+    "test:audit": "node --test tests/final-integration.audit.test.cjs",
+    "test:internal": "node --test tests/internal-testing.acceptance.test.cjs",
+    "test:data-layer": "node --test tests/real-intelligence-data-layer.test.cjs",
+    "test:gemini": "node --test tests/gemini-real-integration.test.cjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

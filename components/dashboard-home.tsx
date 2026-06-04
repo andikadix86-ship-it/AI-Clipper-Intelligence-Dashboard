@@ -9,6 +9,8 @@ import { FeatureCards } from "@/components/dashboard/feature-cards";
 import { KPIOverview } from "@/components/dashboard/kpi-overview";
 import { PolicyQualitySnapshot } from "@/components/dashboard/policy-quality-snapshot";
 import { QuickAccess } from "@/components/dashboard/quick-access";
+import { WarningCard } from "@/components/state-cards";
+import { ProviderRuntimeStatus } from "@/components/provider-runtime-status";
 import type { DashboardSummary } from "@/components/dashboard/types";
 
 const initialSummary: DashboardSummary = {
@@ -30,8 +32,9 @@ export function DashboardHome() {
   return (
     <div className="space-y-6">
       <DashboardHero />
-      {warning ? <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">{warning}</p> : null}
+      {warning ? <WarningCard compact title="Fallback mode aktif" description={warning} /> : null}
       <FeatureCards />
+      <ProviderRuntimeStatus compact />
       <KPIOverview summary={summary} />
       <ContentPipeline summary={summary} />
       <div className="grid gap-6 2xl:grid-cols-[1.42fr_0.78fr]">

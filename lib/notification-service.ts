@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { serverLogger } from "@/lib/server-logger";
 
 export type NotificationInput = {
   title: string;
@@ -12,7 +13,8 @@ export type NotificationInput = {
 export async function createNotification(input: NotificationInput) {
   try {
     return await prisma.notification.create({ data: { ...input, severity: input.severity ?? "INFO" } });
-  } catch {
+  } catch (error) {
+    serverLogger.warn("notifications.create.fallback", { source: input.source, type: input.type }, error);
     return null;
   }
 }

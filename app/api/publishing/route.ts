@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mapPublishingItem } from "@/lib/publishing-service";
 import { prisma } from "@/lib/prisma";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ export async function GET() {
 
     return NextResponse.json({ items: schedules.map(mapPublishingItem) });
   } catch (error) {
-    console.error("[publishing] Database unavailable while loading publishing queue.", error);
+    serverLogger.warn("publishing.queue.database_fallback", undefined, error);
     return NextResponse.json({ items: [], source: "fallback", message: "Database unavailable, using empty publishing queue." });
   }
 }

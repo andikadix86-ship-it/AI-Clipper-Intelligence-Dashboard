@@ -12,6 +12,7 @@ type TextWorkflowInput = {
   projectId?: string | null;
   provider?: AIProviderName;
   mode?: ProviderMode;
+  failOnRealProviderError?: boolean;
 };
 
 type TextWorkflowResult = {
@@ -34,15 +35,19 @@ export async function runTextWorkflow(input: TextWorkflowInput): Promise<TextWor
   const providerName = input.provider ?? "OPENAI_SORA";
   const runtime = await getProviderRuntime(providerName, input.mode ?? "REAL");
   const topic = `${operationPrompt[input.operation]}\n\n${input.topic}`;
+  if (input.failOnRealProviderError && input.mode === "REAL" && runtime.mode !== "REAL") {
+    throw new Error("Provider REAL belum siap. Periksa API key dan status provider sebelum menjalankan AI Analysis.");
+  }
+  const allowDummyFallback = !(input.failOnRealProviderError && runtime.mode === "REAL");
 
   const result =
     input.operation === "CAPTION"
-      ? await runtime.adapter.generateCaption({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey })
+      ? await runtime.adapter.generateCaption({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey, allowDummyFallback })
       : input.operation === "AI_ANALYSIS"
-      ? await runtime.adapter.analyzeContent({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey })
+      ? await runtime.adapter.analyzeContent({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey, allowDummyFallback })
       : input.operation === "RECOMMENDATION"
-        ? await runtime.adapter.analyzeContent({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey })
-        : await runtime.adapter.generateScript({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey });
+        ? await runtime.adapter.analyzeContent({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey, allowDummyFallback })
+        : await runtime.adapter.generateScript({ provider: providerName, mode: runtime.mode, topic, platform: input.platform, apiKey: runtime.apiKey, allowDummyFallback });
 
   const warning = runtime.warning ?? result.warning;
   let jobId: string | undefined;

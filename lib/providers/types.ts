@@ -39,6 +39,11 @@ export type ProviderResult = {
   provider: AIProviderName;
   mode: ProviderMode;
   type?: CreativeType;
+  providerError?: {
+    code: string;
+    message: string;
+    retryable: boolean;
+  };
 };
 
 export interface AIProviderAdapter {

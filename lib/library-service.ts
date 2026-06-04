@@ -138,7 +138,9 @@ type ContentWithRelations = {
 };
 
 export function mapContentItem(item: ContentWithRelations): LibraryItemDto {
-  const schedule = item.schedules[0];
+  const schedules = item.schedules ?? [];
+  const tags = item.tags ?? [];
+  const schedule = schedules[0];
   const analytics = item.analytics?.[0];
   const generationMetadata =
     item.creativeAsset?.metadata && typeof item.creativeAsset.metadata === "object" && !Array.isArray(item.creativeAsset.metadata)
@@ -224,7 +226,7 @@ export function mapContentItem(item: ContentWithRelations): LibraryItemDto {
     project: item.project?.name ?? "Unassigned",
     socialAccountId: item.socialAccountId ?? schedule?.socialAccountId,
     socialAccount: item.socialAccount?.name ?? schedule?.socialAccount.name ?? "Unassigned",
-    tags: item.tags,
+    tags,
     date: item.createdAt.toISOString().slice(0, 10),
     meta: `${contentTypeLabels[item.type]} - ${contentStatusLabels[item.workflowStatus]}`,
     approvalHistory: item.approvalHistory?.map((history) => ({
@@ -251,7 +253,7 @@ export function mapContentItem(item: ContentWithRelations): LibraryItemDto {
         assetStatus: version.assetStatus,
         createdAt: version.createdAt.toISOString()
       })),
-    publishingHistory: item.schedules.map((schedule) => ({
+    publishingHistory: schedules.map((schedule) => ({
       id: schedule.id ?? "",
       status: schedule.status,
       platform: schedule.socialPlatform ? socialPlatformLabels[schedule.socialPlatform] : "Unassigned",

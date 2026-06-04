@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { runTextWorkflow } from "@/lib/text-ai-service";
 import type { AIProviderName, ProviderMode, SocialPlatform } from "@/lib/types";
+import { buildCoreIntelligence } from "@/lib/intelligence/core-engine";
+import { ingestKnowledge } from "@/lib/intelligence/knowledge-base";
 
 export const runtime = "nodejs";
 
@@ -15,9 +17,13 @@ export async function POST(request: Request) {
     provider,
     mode: body.mode as ProviderMode | undefined
   });
+  const intelligence = buildCoreIntelligence({ topic: body.topic ?? body.content, niche: body.niche, platform: body.platform });
+  const knowledgeBase = await ingestKnowledge(intelligence, "AI_CONTENT_CREATOR");
   return NextResponse.json({
     result: { ...generated.result, warning: generated.warning },
     generationJobId: generated.jobId,
-    mode: generated.mode
+    mode: generated.mode,
+    intelligence,
+    knowledgeBase
   });
 }

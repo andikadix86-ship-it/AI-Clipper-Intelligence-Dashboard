@@ -14,7 +14,7 @@ export function KPIOverview({ summary }: { summary: DashboardSummary }) {
     <section>
       <div className="mb-4"><h2 className="text-lg font-semibold text-white">Today&apos;s Overview</h2><p className="mt-1 text-sm text-slate-500">Ringkasan workflow konten hari ini.</p></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {kpis.map((kpi) => <article key={kpi.label} className="premium-panel rounded-2xl p-4"><div className={`grid h-9 w-9 place-items-center rounded-xl ${kpi.tone}`}><kpi.icon className="h-4 w-4" /></div><div className="mt-4 text-2xl font-bold text-white">{kpi.value}</div><div className="mt-1 text-sm font-medium text-slate-300">{kpi.label}</div><div className="mt-2 text-xs text-slate-500">{kpi.change}</div></article>)}
+        {kpis.map((kpi) => <article key={kpi.label} className="premium-panel h-full rounded-2xl p-4"><div className={`grid h-9 w-9 place-items-center rounded-xl ${kpi.tone}`}><kpi.icon className="h-4 w-4" /></div><div className="mt-4 text-2xl font-bold text-white">{kpi.value}</div><div className="mt-1 text-sm font-medium text-slate-300">{kpi.label}</div><div className="mt-2 text-xs text-slate-500">{kpi.change}</div></article>)}
       </div>
     </section>
   );

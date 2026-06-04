@@ -52,13 +52,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#070B17] lg:flex">
       <button type="button" aria-label="Open navigation" onClick={() => setOpen(true)} className="fixed left-4 top-4 z-40 rounded-xl border border-white/10 bg-[#0C1325] p-3 text-white shadow-lg lg:hidden">
         <Menu className="h-5 w-5" />
       </button>
-      <Sidebar open={open} pathname={pathname} onClose={() => setOpen(false)} />
+      <Sidebar open={open} pathname={pathname} collapsed={collapsed} onClose={() => setOpen(false)} onToggleCollapsed={() => setCollapsed((current) => !current)} />
       {open ? <div className="fixed inset-0 z-40 bg-black/70 lg:hidden" onClick={() => setOpen(false)} /> : null}
       <main className="min-w-0 flex-1">
         <Topbar />

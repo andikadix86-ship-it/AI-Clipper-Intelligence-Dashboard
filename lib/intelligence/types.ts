@@ -29,8 +29,15 @@ export type IntelligenceResultDto = {
 export type AffiliateProductInsightDto = {
   id: string;
   productName: string;
-  platform: "Shopee" | "TikTok Shop" | "Tokopedia";
+  platform: "TikTok Shop" | "Shopee" | "Tokopedia" | "Lazada" | "Facebook" | "Instagram" | "Custom Affiliate";
   category: string;
+  sourceType?: "DEMO" | "CACHE" | "REAL" | "REAL_USER_INPUT";
+  productUrl?: string;
+  affiliateUrl?: string;
+  price?: number;
+  commissionRate?: number;
+  revenue?: number;
+  salesVolume?: number;
   trendScore: number;
   competitionLevel: "Low" | "Medium" | "High";
   commissionEstimate: string;
@@ -42,6 +49,19 @@ export type AffiliateProductInsightDto = {
   collectedAt: string;
   isDemo: boolean;
   notes: string;
+  opportunityScore?: number;
+  scoreBreakdown?: ProductOpportunityScore;
+  isEstimated?: boolean;
+  lastSyncedAt?: string;
+};
+
+export type ProductOpportunityScore = {
+  demand: number;
+  competition: number;
+  commission: number;
+  contentPotential: number;
+  trend: number;
+  opportunity: number;
 };
 
 export type TrendScoreInput = {

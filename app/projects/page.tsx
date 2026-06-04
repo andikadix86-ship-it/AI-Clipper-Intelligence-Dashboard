@@ -1,9 +1,10 @@
 "use client";
 
-import { FolderKanban, Layers3, Plus, Sparkles } from "lucide-react";
+import { FolderKanban, Layers3, Loader2, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ContentMode, ProjectDto } from "@/lib/types";
+import { EmptyCard, ErrorCard } from "@/components/state-cards";
 
 const modes: Array<{ value: ContentMode; label: string }> = [
   { value: "CLIPPER", label: "Clipper Mode" },
@@ -21,30 +22,46 @@ export default function ProjectsPage() {
     contentMode: "CLIPPER" as ContentMode
   });
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
       .then((response) => response.json())
-      .then((data) => setProjects(data.projects));
+      .then((data) => {
+        setProjects(Array.isArray(data.projects) ? data.projects : []);
+        if (data.source === "fallback") setLoadError("Supabase belum tersedia. Project yang tampil adalah sample fallback dan tidak boleh dianggap sebagai data tersimpan.");
+      })
+      .catch(() => setLoadError("Project gagal dimuat. Workspace tetap dapat dibuka, tetapi penyimpanan membutuhkan Supabase aktif."))
+      .finally(() => setLoading(false));
   }, []);
 
   async function createProject() {
-    setMessage(null);
-    const response = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        targetAccounts: form.targetAccounts.split(",").map((item) => item.trim()).filter(Boolean)
-      })
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setMessage(data.error ?? "Project could not be created.");
+    if (!form.name.trim() || !form.niche.trim() || !form.category.trim()) {
+      setMessage("Project name, niche, dan kategori wajib diisi.");
       return;
     }
-    setProjects((current) => [data.project, ...current]);
-    setMessage(data.warning ?? "Project saved.");
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          targetAccounts: form.targetAccounts.split(",").map((item) => item.trim()).filter(Boolean)
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Project could not be created.");
+      setProjects((current) => [data.project, ...current]);
+      setMessage(data.warning ?? "Project saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Project could not be created.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -59,6 +76,7 @@ export default function ProjectsPage() {
           Organize every niche, social destination, and content generation mode from one project hub.
         </p>
       </header>
+      {loadError ? <ErrorCard title="Project data belum tersedia" description={loadError} /> : null}
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="glass rounded-2xl p-5 md:p-6">
@@ -83,16 +101,17 @@ export default function ProjectsPage() {
                 ))}
               </select>
             </Field>
-            <button onClick={createProject} type="button" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-4 font-semibold text-slate-950 shadow-glow">
-              <Plus className="h-5 w-5" />
-              Save Project
+            <button onClick={createProject} disabled={saving} type="button" className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-4 font-semibold text-slate-950 shadow-glow disabled:opacity-60">
+              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+              {saving ? "Saving..." : "Save Project"}
             </button>
             {message ? <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-300">{message}</p> : null}
           </div>
         </div>
 
         <div className="grid gap-4">
-          {projects.map((project) => (
+          {loading ? <div className="glass rounded-2xl p-5 text-sm text-slate-300">Memuat project...</div> : null}
+          {!loading && projects.map((project) => (
             <article key={project.id} className="glass rounded-2xl p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -106,7 +125,7 @@ export default function ProjectsPage() {
                 <Layers3 className="h-6 w-6 text-teal-300" />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {project.targetAccounts.map((account) => (
+                {(project.targetAccounts ?? []).map((account) => (
                   <span key={account} className="rounded-full bg-white/[0.06] px-3 py-1 text-xs text-slate-300">{account}</span>
                 ))}
               </div>
@@ -115,15 +134,7 @@ export default function ProjectsPage() {
               </Link>
             </article>
           ))}
-          {!projects.length ? (
-            <div className="glass grid min-h-72 place-items-center rounded-2xl p-8 text-center">
-              <div>
-                <FolderKanban className="mx-auto mb-4 h-10 w-10 text-teal-300" />
-                <h2 className="text-xl font-semibold text-white">Belum ada project</h2>
-                <p className="mt-2 max-w-md text-sm text-slate-400">Buat project pertama sebagai pusat workflow niche, brand, atau campaign.</p>
-              </div>
-            </div>
-          ) : null}
+          {!loading && !projects.length ? <EmptyCard title="Belum ada project" description="Buat project pertama sebagai pusat workflow niche, brand, atau campaign." /> : null}
         </div>
       </section>
     </div>

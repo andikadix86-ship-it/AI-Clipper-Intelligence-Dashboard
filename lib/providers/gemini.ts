@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { dummyProvider } from "@/lib/providers/dummy";
 import { providerErrorMessage } from "@/lib/providers/errors";
+import { extractGeminiText, GeminiClientError, requestGeminiJson } from "@/lib/providers/gemini-client";
 import { buildCreativeFinalPrompt } from "@/lib/providers/prompt";
 import type { AIProviderAdapter, ProviderGenerateInput, ProviderResult, ProviderTextInput } from "@/lib/providers/types";
 
@@ -10,37 +11,22 @@ const GEMINI_TEXT_MODEL = "gemini-2.5-flash";
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 const VEO_VIDEO_MODEL = "veo-3.1-generate-preview";
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function callGeminiText(input: ProviderTextInput, instruction: string): Promise<ProviderResult> {
   if (input.mode !== "REAL" || !input.apiKey) return dummyProvider.generateCaption(input);
   try {
-    const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": input.apiKey
-      },
-      body: JSON.stringify({
+    const data = await requestGeminiJson({
+      apiKey: input.apiKey,
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent`,
+      payload: {
         contents: [
           {
             role: "user",
             parts: [{ text: `${instruction}\n\nTopic/content:\n${input.topic}\n\nPlatform: ${input.platform ?? "multi-platform"}` }]
           }
         ]
-      })
+      }
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error?.message ?? "Gemini request failed.");
-    const text = data.candidates?.flatMap((candidate: { content?: { parts?: Array<{ text?: string }> } }) => candidate.content?.parts ?? []).map((part: { text?: string }) => part.text).filter(Boolean).join("\n") ?? "";
+    const text = extractGeminiText(data);
     return {
       title: "Gemini text response",
       description: text || "Gemini returned an empty response.",
@@ -59,6 +45,7 @@ async function callGeminiText(input: ProviderTextInput, instruction: string): Pr
     return {
       ...fallback,
       warning: `Dummy fallback used. ${providerErrorMessage(error, "Gemini")}`,
+      providerError: providerError(error),
       mode: "DUMMY"
     };
   }
@@ -81,22 +68,18 @@ async function generateGeminiImage(input: ProviderGenerateInput): Promise<Provid
   }
 
   try {
-    const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": input.apiKey
-      },
-      body: JSON.stringify({
+    const data = await requestGeminiJson({
+      apiKey: input.apiKey,
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`,
+      payload: {
         contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
         generationConfig: {
           responseModalities: ["TEXT", "IMAGE"],
           imageConfig: input.aspectRatio ? { aspectRatio: input.aspectRatio } : undefined
         }
-      })
-    }, 45000);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error?.message ?? "Gemini image request failed.");
+      },
+      timeoutMs: 45000
+    });
     const parts = data.candidates?.flatMap((candidate: { content?: { parts?: Array<{ text?: string; inlineData?: { data?: string; mimeType?: string } }> } }) => candidate.content?.parts ?? []) ?? [];
     const image = parts.find((part: { inlineData?: { data?: string } }) => part.inlineData?.data)?.inlineData;
     if (!image?.data) throw new Error("Gemini image response did not include image data.");
@@ -121,6 +104,7 @@ async function generateGeminiImage(input: ProviderGenerateInput): Promise<Provid
     return {
       ...fallback,
       warning: `Dummy fallback because provider failed. ${providerErrorMessage(error, "Gemini")}`,
+      providerError: providerError(error),
       model: GEMINI_IMAGE_MODEL,
       finalPrompt,
       originalPrompt,
@@ -129,6 +113,11 @@ async function generateGeminiImage(input: ProviderGenerateInput): Promise<Provid
       outputSource: "dummy"
     };
   }
+}
+
+function providerError(error: unknown) {
+  if (error instanceof GeminiClientError) return { code: error.code, message: error.message, retryable: error.retryable };
+  return { code: "PROVIDER_ERROR", message: providerErrorMessage(error, "Gemini"), retryable: true };
 }
 
 async function generateVeoFallback(input: ProviderGenerateInput, type: "AI_VIDEO" | "MOTION_IMAGE") {

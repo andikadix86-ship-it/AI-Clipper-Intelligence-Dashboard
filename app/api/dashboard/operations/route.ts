@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withTimeout } from "@/lib/db-timeout";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -53,7 +54,7 @@ export async function GET() {
       source: "database"
     });
   } catch (error) {
-    console.error("[dashboard] Database unavailable while loading operations summary.", error);
+    serverLogger.warn("dashboard.operations.database_fallback", undefined, error);
     return NextResponse.json(fallbackOperations);
   }
 }

@@ -17,6 +17,7 @@ import type { LucideIcon } from "lucide-react";
 import { WorkflowPanel } from "@/components/centers/center-ui";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { PageHeader, StatCard } from "@/components/studio-ui";
+import { AgentOrchestrationPanel } from "@/components/centers/agent-orchestration-panel";
 
 type AgentStatus = "Active" | "Idle" | "Need Setup";
 
@@ -58,8 +59,8 @@ function AgentCard({ agent }: { agent: (typeof agents)[number] }) {
         <div><div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">Success rate</div><div className="mt-1 text-xs font-semibold text-cyan-100">{agent.successRate}</div></div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" className="rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.1]">Configure</button>
-        <button type="button" className="rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05]">View Logs</button>
+        <button type="button" disabled title="Agent configuration UI belum aktif pada MVP Beta." className="cursor-not-allowed rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-2 text-xs font-semibold text-cyan-100 opacity-60">Setup Preview</button>
+        <button type="button" disabled title="Gunakan orchestration panel untuk workflow agent yang sudah aktif." className="cursor-not-allowed rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2 text-xs font-semibold text-slate-300 opacity-60">Logs Preview</button>
       </div>
     </article>
   );
@@ -74,6 +75,7 @@ export function AIAgentsWorkspace() {
         subtitle="Manage specialized agents that research, create, review, publish, and analyze your content operations."
         description="Agent cards menggunakan clean dummy data. Configure dan log preview disiapkan sebagai UI foundation tanpa menjalankan workflow backend otomatis."
       />
+      <AgentOrchestrationPanel />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Agents" value="08" detail="Specialized automation roles" />
@@ -130,8 +132,8 @@ export function AIAgentsWorkspace() {
             <p className="mt-1 text-xs leading-5 text-slate-500">Policy Agent completed originality review. Approve export bundle before Publishing Agent continues.</p>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-2 text-xs font-semibold text-emerald-200">Approve Preview</button>
-            <button type="button" className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-semibold text-slate-300">View Detail</button>
+            <button type="button" disabled title="UI-only preview. Approval operasional tersedia di Publishing Center." className="cursor-not-allowed rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-2 text-xs font-semibold text-emerald-200 opacity-60">Approval Preview</button>
+            <button type="button" disabled title="UI-only preview." className="cursor-not-allowed rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-semibold text-slate-300 opacity-60">Detail Preview</button>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-600"><Clock3 className="h-3.5 w-3.5" /> Approval controls are placeholders for a future backend workflow.</div>

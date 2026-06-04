@@ -1,5 +1,6 @@
 import { apiSuccess } from "@/lib/api-response";
 import { listDataDrivenAnalyses } from "@/lib/intelligence/analysis-engine/repository";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     });
     return apiSuccess("Data-driven analyses loaded.", { analyses }, { analyses });
   } catch (error) {
-    console.error("[intelligence] Database unavailable while loading analyses.", error);
+    serverLogger.warn("intelligence.analyses.database_fallback", undefined, error);
     return apiSuccess("Database unavailable, using empty analysis list.", { analyses: [], source: "fallback" }, { analyses: [], source: "fallback" });
   }
 }

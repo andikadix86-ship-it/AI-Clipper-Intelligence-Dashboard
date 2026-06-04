@@ -1,11 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { BarChart3, CalendarClock, Edit3, Eye, Plus, Power, Save, Share2, Trash2, UploadCloud } from "lucide-react";
+import { BarChart3, CalendarClock, Edit3, Eye, Loader2, Plus, Power, Save, Share2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { authStatusLabels, publishModeLabels, socialPlatformLabels, statusLabels, uploadMethodLabels, type SocialAccountDto } from "@/lib/social-account-service";
 import type { AuthStatus, ProjectDto, PublishMode, SocialConnectionStatus, SocialPlatform, UploadMethod } from "@/lib/types";
+import { EmptyCard, ErrorCard } from "@/components/state-cards";
 
 type FormState = {
   platform: SocialPlatform;
@@ -22,32 +23,6 @@ type FormState = {
   notes: string;
   isActive: boolean;
 };
-
-const fallbackAccounts: SocialAccountDto[] = [
-  {
-    id: "acct_fatih_yt",
-    platform: "YOUTUBE_SHORTS",
-    name: "Fatih Shorts",
-    handle: "@fatihshorts",
-    niche: "AI creator workflow",
-    projectId: "project_creator_growth",
-    projectName: "Creator Growth Engine",
-    status: "MANUAL",
-    uploadMethod: "MANUAL",
-    uploadMode: "MANUAL",
-    authStatus: "NOT_CONNECTED",
-    tokenMasked: "",
-    connectionNotes: "Manual upload only. No token stored.",
-    permissionStatus: "NOT_REQUESTED",
-    loginNotes: "Manual upload via studio dashboard.",
-    notes: "Prioritize evening uploads.",
-    isActive: true,
-    lastActivityAt: "2026-05-30T12:00:00.000Z",
-    totalContent: 148,
-    scheduledPosts: 18,
-    postedPosts: 116
-  }
-];
 
 const emptyForm: FormState = {
   platform: "TIKTOK",
@@ -67,10 +42,13 @@ const emptyForm: FormState = {
 
 export default function SocialAccountsPage() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [accounts, setAccounts] = useState<SocialAccountDto[]>(fallbackAccounts);
+  const [accounts, setAccounts] = useState<SocialAccountDto[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -80,10 +58,12 @@ export default function SocialAccountsPage() {
       .then(([projectData, accountData]) => {
         const loadedProjects = projectData.projects ?? [];
         setProjects(loadedProjects);
-        setAccounts(accountData.accounts?.length ? accountData.accounts : fallbackAccounts);
+        setAccounts(Array.isArray(accountData.accounts) ? accountData.accounts : []);
+        if (accountData.source === "fallback") setLoadError(accountData.message ?? "Social Accounts memakai empty fallback karena database belum tersedia.");
         setForm((current) => ({ ...current, projectId: loadedProjects[0]?.id ?? "" }));
       })
-      .catch((error) => setToast({ type: "error", message: error instanceof Error ? error.message : "Gagal memuat Social Accounts." }));
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Gagal memuat Social Accounts."))
+      .finally(() => setLoading(false));
   }, []);
 
   const summary = useMemo(
@@ -102,6 +82,7 @@ export default function SocialAccountsPage() {
       return;
     }
 
+    setSaving(true);
     try {
       const response = await fetch(editingId ? `/api/social-accounts/${editingId}` : "/api/social-accounts", {
         method: editingId ? "PATCH" : "POST",
@@ -117,6 +98,8 @@ export default function SocialAccountsPage() {
       setToast({ type: "success", message: "Akun sosial berhasil disimpan ke Supabase." });
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Akun gagal disimpan ke Supabase." });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -180,6 +163,7 @@ export default function SocialAccountsPage() {
         <h1 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">Social Account Manager</h1>
         <p className="mt-3 max-w-3xl text-slate-300">Kelola banyak akun sosial media per Project dan niche tanpa menyimpan password sosial media.</p>
       </header>
+      {loadError ? <ErrorCard title="Social Accounts fallback aktif" description={loadError} /> : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Total Accounts" value={summary.total} icon={Share2} />
@@ -233,15 +217,16 @@ export default function SocialAccountsPage() {
             <Field label="Notes"><textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>
             <Field label="Connection Notes"><textarea value={form.connectionNotes} onChange={(e) => setForm({ ...form, connectionNotes: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>
             <Field label="Catatan login/manual upload"><textarea value={form.loginNotes} onChange={(e) => setForm({ ...form, loginNotes: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>
-            <button type="button" onClick={saveAccount} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-4 font-semibold text-slate-950 shadow-glow">
-              {editingId ? <Save className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-              {editingId ? "Save Changes" : "Add Account"}
+            <button type="button" onClick={saveAccount} disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-4 font-semibold text-slate-950 shadow-glow disabled:opacity-60">
+              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : editingId ? <Save className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              {saving ? "Saving..." : editingId ? "Save Changes" : "Add Account"}
             </button>
           </div>
         </div>
 
         <div className="grid gap-4">
-          {accounts.length ? accounts.map((account) => (
+          {loading ? <div className="glass rounded-2xl p-5 text-sm text-slate-300">Memuat social accounts...</div> : null}
+          {!loading && accounts.length ? accounts.map((account) => (
             <article key={account.id} className="glass rounded-2xl p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0">
@@ -274,14 +259,7 @@ export default function SocialAccountsPage() {
               </div>
             </article>
           )) : (
-            <div className="glass grid min-h-80 place-items-center rounded-2xl p-8 text-center">
-              <div>
-                <UploadCloud className="mx-auto mb-4 h-10 w-10 text-teal-300" />
-                <h2 className="text-xl font-semibold text-white">Belum ada akun sosial</h2>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-400">Belum ada akun sosial terhubung. Tambahkan akun manual terlebih dahulu agar content dapat dijadwalkan.</p>
-                <a href="#add-social-account" className="mt-5 inline-flex rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500">Add Social Account</a>
-              </div>
-            </div>
+            <EmptyCard title="Belum ada akun sosial" description="Tambahkan akun manual terlebih dahulu agar content dapat dijadwalkan." action={{ label: "Add Social Account", href: "#add-social-account" }} />
           )}
         </div>
       </section>

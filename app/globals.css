@@ -4,6 +4,15 @@
 
 :root {
   color-scheme: dark;
+  --studio-primary: #3b82f6;
+  --studio-secondary: #8b5cf6;
+  --studio-accent: #22d3ee;
+  --studio-border: rgba(255, 255, 255, 0.075);
+  --studio-card: rgba(14, 21, 40, 0.9);
+  --studio-background: #070b17;
+  --studio-card-radius: 1rem;
+  --studio-control-radius: 0.75rem;
+  --studio-card-shadow: 0 14px 38px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 * {
@@ -17,7 +26,7 @@ body {
   background:
     radial-gradient(circle at 86% 0%, rgba(59, 130, 246, 0.08), transparent 27rem),
     radial-gradient(circle at 60% 18%, rgba(124, 58, 237, 0.055), transparent 30rem),
-    #070b17;
+    var(--studio-background);
   color: #e5e7eb;
 }
 
@@ -35,9 +44,35 @@ textarea {
 }
 
 .premium-panel {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(14, 21, 40, 0.88);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--studio-border);
+  background: var(--studio-card);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.hero-shadow {
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+}
+
+.skeleton-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  background: rgba(14, 21, 40, 0.82);
+}
+
+.skeleton-panel::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  transform: translateX(-100%);
+  animation: studio-shimmer 1.55s infinite;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055), transparent);
+}
+
+@keyframes studio-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .glass.rounded-2xl,

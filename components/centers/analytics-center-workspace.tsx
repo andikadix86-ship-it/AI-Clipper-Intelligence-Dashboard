@@ -13,6 +13,7 @@ import {
 import { BarChartPanel, ModuleGrid } from "@/components/centers/center-ui";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { PageHeader, StatCard } from "@/components/studio-ui";
+import { AnalyticsEnginePanel } from "@/components/centers/analytics-engine-panel";
 
 const metrics = [
   { title: "Views", detail: "Total content views across active platforms.", metric: "2.84M", icon: Eye },
@@ -60,6 +61,7 @@ export function AnalyticsCenterWorkspace() {
         description="Dashboard analytics menggunakan clean dummy data dan mini chart CSS agar siap diganti dengan sumber reporting real."
         action={{ label: "Open Detailed Analytics", href: "/analytics/dashboard" }}
       />
+      <AnalyticsEnginePanel />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Views" value="2.84M" detail="+18% demo movement" />

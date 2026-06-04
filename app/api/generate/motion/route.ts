@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getProviderRuntime } from "@/lib/providers";
-import { buildCreativeFinalPrompt, promptPreview } from "@/lib/providers/prompt";
+import { buildCreativeFinalPrompt } from "@/lib/providers/prompt";
 import type { AIProviderName, ProviderMode } from "@/lib/types";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,6 @@ export async function POST(request: Request) {
       errorMessage: runtimeInfo.warning ?? result.warning
     }
   }).catch(() => null);
-  console.info("[generation-debug] completed", { provider, mode: result.mode, generationType: "MOTION_IMAGE", model: result.model, promptPreview: promptPreview(finalPrompt), isDummy: result.isDummy ?? result.mode === "DUMMY", jobId: job?.id, outputSource: result.outputSource, errorMessage: runtimeInfo.warning ?? result.warning });
+  serverLogger.info("creative.motion.completed", { provider, mode: result.mode, generationType: "MOTION_IMAGE", model: result.model, isDummy: result.isDummy ?? result.mode === "DUMMY", jobId: job?.id, outputSource: result.outputSource, errorMessage: runtimeInfo.warning ?? result.warning });
   return NextResponse.json({ result: { ...result, warning: runtimeInfo.warning ?? result.warning }, generationJobId: job?.id });
 }

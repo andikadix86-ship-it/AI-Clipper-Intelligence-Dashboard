@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,7 @@ export async function GET() {
       }))
     });
   } catch (error) {
-    console.error("[library] Database unavailable while loading collections.", error);
+    serverLogger.warn("library.collections.database_fallback", undefined, error);
     return NextResponse.json({ collections: [], source: "fallback", message: "Database unavailable, using empty collection list." });
   }
 }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withTimeout } from "@/lib/db-timeout";
+import { serverLogger } from "@/lib/server-logger";
+import { getDatabaseConfiguration } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,13 +14,15 @@ function configured(value?: string | null) {
 export async function GET() {
   let databaseStatus: "ok" | "error" = "ok";
   let databaseMessage = "Database reachable.";
+  const databaseConfig = getDatabaseConfiguration();
 
   try {
+    if (!databaseConfig.configured) throw new Error(databaseConfig.message);
     await withTimeout(prisma.$queryRaw`SELECT 1`);
   } catch (error) {
-    console.error("[health] Database connectivity check failed.", error);
+    serverLogger.warn("health.database_unavailable", { configured: databaseConfig.configured }, error);
     databaseStatus = "error";
-    databaseMessage = error instanceof Error ? error.message : "Database health check failed.";
+    databaseMessage = databaseConfig.configured ? "Database connection is unavailable. Check Supabase pooler, SSL, and environment configuration." : databaseConfig.message;
   }
 
   const providers = {
@@ -40,7 +44,7 @@ export async function GET() {
       },
       database: {
         status: databaseStatus,
-        message: databaseStatus === "ok" ? databaseMessage : "Database connection is unavailable. Check DATABASE_URL, Supabase pooler, and SSL."
+        message: databaseMessage
       },
       providers,
       timestamp: new Date().toISOString()

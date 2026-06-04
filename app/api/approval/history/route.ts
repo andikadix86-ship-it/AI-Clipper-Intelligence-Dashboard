@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
       }))
     });
   } catch (error) {
-    console.error("[approval] Database unavailable while loading approval history.", error);
+    serverLogger.warn("approval.history.database_fallback", undefined, error);
     return NextResponse.json({ history: [], source: "fallback", message: "Database unavailable, using empty approval history." });
   }
 }

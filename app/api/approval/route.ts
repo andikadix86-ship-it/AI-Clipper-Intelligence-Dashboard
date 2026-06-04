@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getLibraryItems } from "@/lib/library-service";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,7 @@ export async function GET() {
       items: items.filter((item) => item.workflowStatus === "REVIEW")
     });
   } catch (error) {
-    console.error("[approval] Database unavailable while loading approval queue.", error);
+    serverLogger.warn("approval.queue.database_fallback", undefined, error);
     return NextResponse.json({ items: [], source: "fallback", message: "Database unavailable, using empty approval queue." });
   }
 }

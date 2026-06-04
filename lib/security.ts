@@ -22,17 +22,21 @@ export function decodeSecret(value?: string | null) {
 export function sanitizeErrorMessage(error: unknown) {
   const raw = error instanceof Error ? error.message : typeof error === "string" ? error : "Unexpected server error.";
   const lowered = raw.toLowerCase();
-  if (lowered.includes("tls") || lowered.includes("certificate") || lowered.includes("pg_hba") || lowered.includes("database")) {
+  if (raw.startsWith("DATABASE_URL")) return raw;
+  if (lowered.includes("tls") || lowered.includes("certificate") || lowered.includes("pg_hba") || lowered.includes("database") || lowered.includes("enotfound")) {
     return "Database connection is temporarily unavailable. Check Supabase pooler, SSL, and environment configuration.";
   }
-  return raw.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1***").replace(/(key|token|secret|password)=([^&\s]+)/gi, "$1=***");
+  return raw
+    .replace(/(postgres(?:ql)?:\/\/)[^@\s]+@/gi, "$1***@")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1***")
+    .replace(/(key|token|secret|password)=([^&\s]+)/gi, "$1=***");
 }
 
 export function sanitizeMetadata(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((item) => sanitizeMetadata(item));
   if (value && typeof value === "object") {
     return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, entry]) => {
-      acc[key] = sensitiveKeyPattern.test(key) ? maskSecret(String(entry ?? "")) : sanitizeMetadata(entry);
+      acc[key] = sensitiveKeyPattern.test(key) && typeof entry === "string" ? maskSecret(entry) : sanitizeMetadata(entry);
       return acc;
     }, {});
   }

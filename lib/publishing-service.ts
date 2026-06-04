@@ -66,7 +66,7 @@ export function mapPublishingItem(row: PublishingRow) {
     title: content?.title ?? "Untitled content",
     description: content?.description ?? "",
     caption: content?.caption ?? "",
-    hashtag: content?.tags.map((tag) => `#${tag}`).join(" ") ?? "",
+    hashtag: content?.tags?.map((tag) => `#${tag}`).join(" ") ?? "",
     thumbnail: content?.thumbnail ?? demoPlaceholder("Publishing Asset"),
     project: row.project?.name ?? "Unassigned",
     socialAccount: row.socialAccount.name,

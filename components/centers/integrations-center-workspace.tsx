@@ -20,6 +20,8 @@ import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { PageHeader, StatCard } from "@/components/studio-ui";
+import { SystemHealthPanel } from "@/components/centers/system-health-panel";
+import { ProviderRuntimeStatus } from "@/components/provider-runtime-status";
 
 type ProviderStatus = "Connected" | "Not Configured" | "Error";
 type ProviderMode = "Dummy" | "Real";
@@ -115,6 +117,9 @@ export function IntegrationsCenterWorkspace() {
         <StatCard label="Needs Setup" value="14" detail="Optional credentials or future work" />
         <StatCard label="Integration Errors" value="01" detail="Fallback-aware database state" />
       </div>
+
+      <SystemHealthPanel />
+      <ProviderRuntimeStatus />
 
       {groups.map((group) => (
         <DashboardPanel key={group.title} title={group.title} description={group.description}>

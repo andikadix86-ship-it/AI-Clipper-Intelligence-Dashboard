@@ -22,6 +22,7 @@ import type { AffiliateProductInsightDto, IntelligenceRecommendationDto, Intelli
 import { googleTrendsScoreExplanation, recommendationScoreExplanation } from "@/lib/intelligence/scoring";
 import type { ProjectDto } from "@/lib/types";
 import { IntelligenceSearchPanel } from "@/components/intelligence-search-panel";
+import { ErrorCard } from "@/components/state-cards";
 
 type Trend = IntelligenceResultDto;
 type SourceStatus = { name: string; status: "READY" | "SETUP_REQUIRED" | "DEMO"; message: string };
@@ -44,6 +45,8 @@ export default function TrendingCenterPage() {
   const [projectId, setProjectId] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     listOpportunities().then((result) => setSavedOpportunities(result.items));
@@ -54,15 +57,16 @@ export default function TrendingCenterPage() {
       fetch("/api/intelligence/recommendations").then((response) => response.json())
     ])
       .then(([trendData, projectData, productData, recommendationData]) => {
-        setTrends(trendData.trends ?? []);
-        setSources(trendData.sources ?? []);
-        setProducts(productData.products ?? []);
-        setRecommendations(recommendationData.recommendations ?? []);
-        const loadedProjects = projectData.projects ?? [];
+        setTrends(Array.isArray(trendData.trends) ? trendData.trends : []);
+        setSources(Array.isArray(trendData.sources) ? trendData.sources : []);
+        setProducts(Array.isArray(productData.products) ? productData.products : []);
+        setRecommendations(Array.isArray(recommendationData.recommendations) ? recommendationData.recommendations : []);
+        const loadedProjects = Array.isArray(projectData.projects) ? projectData.projects : [];
         setProjects(loadedProjects);
         setProjectId(loadedProjects[0]?.id ?? "");
       })
-      .catch(() => setToast({ type: "error", message: "Trending data gagal dimuat." }));
+      .catch(() => setLoadError("Trending data gagal dimuat. Gunakan retry setelah koneksi provider tersedia."))
+      .finally(() => setLoading(false));
   }, []);
 
   const analysisHref = (trend: Trend) => `/ai-analysis?trend=${encodeURIComponent(JSON.stringify({
@@ -217,6 +221,8 @@ export default function TrendingCenterPage() {
           </select>
         </label>
       </header>
+      {loadError ? <ErrorCard title="Trending data belum tersedia" description={loadError} /> : null}
+      {loading ? <div className="glass rounded-2xl p-5 text-sm text-slate-300">Memuat trend dan recommendation...</div> : null}
 
       <IntelligenceSearchPanel mode={mode} />
 

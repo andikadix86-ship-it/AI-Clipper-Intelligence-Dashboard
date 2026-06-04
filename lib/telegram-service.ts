@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { transitionContentStatus } from "@/lib/approval-service";
 import { writeAuditLog } from "@/lib/audit-log";
 import { decodeSecret, encodeSecret, maskSecret } from "@/lib/security";
+import { serverLogger } from "@/lib/server-logger";
+import { resolveTelegramEnvironmentConfig } from "@/lib/telegram-runtime";
 import type { TelegramApprovalLogDto, TelegramSettingDto } from "@/lib/types";
 
 function maskToken(encrypted: string) {
@@ -48,13 +50,19 @@ export function mapTelegramLog(log: {
 }
 
 export async function getTelegramSetting() {
-  const setting = await prisma.telegramSetting.findFirst({ orderBy: { updatedAt: "desc" } });
+  let setting = null;
+  try {
+    setting = await loadTelegramSetting();
+  } catch (error) {
+    serverLogger.warn("telegram.settings.database_fallback", undefined, error);
+  }
   if (setting) return mapTelegramSetting(setting);
+  const runtime = await resolveTelegramRuntimeConfig(setting);
   return {
-    botTokenMasked: process.env.TELEGRAM_BOT_TOKEN ? maskSecret(process.env.TELEGRAM_BOT_TOKEN) : "",
-    chatId: process.env.TELEGRAM_CHAT_ID ?? "",
-    status: "NOT_CONFIGURED" as const,
-    statusLabel: "Not configured"
+    botTokenMasked: runtime.token ? maskSecret(runtime.token) : "",
+    chatId: runtime.chatId,
+    status: runtime.configured ? "NOT_CONNECTED" as const : "NOT_CONFIGURED" as const,
+    statusLabel: runtime.configured ? "Configured, test required" : "Not configured"
   };
 }
 
@@ -71,23 +79,42 @@ export async function saveTelegramSetting(input: { botToken?: string; chatId?: s
   return mapTelegramSetting(setting);
 }
 
+export async function resolveTelegramRuntimeConfig(setting?: Awaited<ReturnType<typeof loadTelegramSetting>>) {
+  let databaseSetting = setting;
+  if (databaseSetting === undefined) {
+    try {
+      databaseSetting = await loadTelegramSetting();
+    } catch (error) {
+      serverLogger.warn("telegram.settings.database_fallback", undefined, error);
+      databaseSetting = null;
+    }
+  }
+  return { setting: databaseSetting, ...resolveTelegramEnvironmentConfig(databaseSetting) };
+}
+
+function loadTelegramSetting() {
+  return prisma.telegramSetting.findFirst({ orderBy: { updatedAt: "desc" } });
+}
+
 async function activeSetting() {
-  const setting = await prisma.telegramSetting.findFirst({ orderBy: { updatedAt: "desc" } });
-  const token = decodeSecret(setting?.botTokenEncrypted ?? "");
-  if (!setting || !token || !setting.chatId) throw new Error("Telegram not connected. Save Bot Token and Chat ID first.");
-  return { setting, token };
+  const runtime = await resolveTelegramRuntimeConfig();
+  if (!runtime.configured) throw new Error("Telegram not connected. Save Bot Token and Chat ID first.");
+  return runtime;
 }
 
 export async function testTelegramConnection() {
-  const { setting, token } = await activeSetting();
+  const { setting, token, chatId } = await activeSetting();
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/getMe`, { method: "GET" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.ok === false) throw new Error(data.description ?? "Telegram test failed.");
-    const updated = await prisma.telegramSetting.update({ where: { id: setting.id }, data: { status: "CONNECTED", lastTestAt: new Date() } });
-    return mapTelegramSetting(updated);
+    if (setting) {
+      const updated = await prisma.telegramSetting.update({ where: { id: setting.id }, data: { status: "CONNECTED", lastTestAt: new Date() } });
+      return mapTelegramSetting(updated);
+    }
+    return { botTokenMasked: maskSecret(token), chatId, status: "CONNECTED" as const, statusLabel: "Connected", lastTestAt: new Date().toISOString() };
   } catch (error) {
-    await prisma.telegramSetting.update({ where: { id: setting.id }, data: { status: "ERROR", lastTestAt: new Date() } });
+    if (setting) await prisma.telegramSetting.update({ where: { id: setting.id }, data: { status: "ERROR", lastTestAt: new Date() } });
     throw error;
   }
 }
@@ -101,10 +128,10 @@ export async function sendTelegramApproval(contentItemId: string, action: "SENT_
   });
 
   try {
-    const { setting, token } = await activeSetting();
+    const { token, chatId } = await activeSetting();
     const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
     const dashboardUrl = appUrl?.startsWith("https://") ? `${appUrl}/library/${contentItemId}` : null;
-    const tags = item.tags.length ? item.tags.map((tag) => `#${tag.replace(/^#/, "")}`).join(" ") : "-";
+    const tags = item.tags?.length ? item.tags.map((tag) => `#${tag.replace(/^#/, "")}`).join(" ") : "-";
     const metadata = item.creativeAsset?.metadata && typeof item.creativeAsset.metadata === "object" && !Array.isArray(item.creativeAsset.metadata) ? item.creativeAsset.metadata as Record<string, unknown> : {};
     const text = [
       `Approval Request: ${item.title}`,
@@ -123,7 +150,7 @@ export async function sendTelegramApproval(contentItemId: string, action: "SENT_
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: setting.chatId,
+        chat_id: chatId,
         text,
         reply_markup: {
           inline_keyboard: [
@@ -144,14 +171,14 @@ export async function sendTelegramApproval(contentItemId: string, action: "SENT_
       where: { id: log.id },
       data: {
         status: "SENT",
-        telegramChatId: String(setting.chatId),
+        telegramChatId: String(chatId),
         telegramMessageId: data.result?.message_id ? String(data.result.message_id) : undefined
       }
     });
     await prisma.contentItem.update({
       where: { id: contentItemId },
       data: {
-        telegramChatId: String(setting.chatId),
+        telegramChatId: String(chatId),
         approvalMessageId: updated.telegramMessageId,
         approvalStatus: item.workflowStatus === "APPROVED" ? "APPROVED" : "PENDING"
       }
@@ -172,7 +199,7 @@ export async function sendTelegramApproval(contentItemId: string, action: "SENT_
       entityType: "ContentItem",
       entityId: contentItemId,
       message: "Approval notification sent to Telegram.",
-      metadata: { action, telegramChatId: setting.chatId, telegramMessageId: updated.telegramMessageId }
+      metadata: { action, telegramChatId: chatId, telegramMessageId: updated.telegramMessageId }
     });
 
     return mapTelegramLog(updated);

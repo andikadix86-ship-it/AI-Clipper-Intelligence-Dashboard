@@ -13,6 +13,8 @@ import {
 import { ModuleGrid, WorkflowPanel } from "@/components/centers/center-ui";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { PageHeader, StatCard } from "@/components/studio-ui";
+import { PublishingEnginePanel } from "@/components/centers/publishing-engine-panel";
+import { TelegramApprovalQueue } from "@/components/centers/telegram-approval-queue";
 
 const modules = [
   { title: "Content Queue", detail: "Review content entering the manual publishing workflow.", icon: ListChecks, metric: "38" },
@@ -59,6 +61,8 @@ export function PublishingCenterWorkspace() {
         description="MVP ini berfokus pada export video dan metadata untuk posting manual. Tidak ada auto-post real yang dijalankan."
         action={{ label: "Open Publishing Queue", href: "/publishing" }}
       />
+      <PublishingEnginePanel />
+      <TelegramApprovalQueue />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Content Queue" value="38" detail="Assets in review workflow" />
@@ -126,8 +130,8 @@ export function PublishingCenterWorkspace() {
             </div>
             <p className="mt-4 text-xs leading-5 text-slate-400">Approval request preview: hook score 91%, metadata 92%, affiliate disclosure included.</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button type="button" className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-2 text-xs font-semibold text-emerald-200">Approve Preview</button>
-              <button type="button" className="rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-semibold text-slate-300">Request Revision</button>
+              <button type="button" disabled title="Preview only. Gunakan Approval Queue untuk aksi operasional." className="cursor-not-allowed rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-2 text-xs font-semibold text-emerald-200 opacity-60">Approve Preview Only</button>
+              <button type="button" disabled title="Preview only. Gunakan Approval Queue untuk aksi operasional." className="cursor-not-allowed rounded-lg border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-semibold text-slate-300 opacity-60">Revision Preview Only</button>
             </div>
           </div>
         </DashboardPanel>

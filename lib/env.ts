@@ -28,7 +28,61 @@ function requireEnv(name: "DATABASE_URL" | "DIRECT_URL") {
 }
 
 export function getDatabaseUrl() {
-  return process.env.DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:6543/postgres?connection_limit=1";
+  return normalizeDatabaseUrl(process.env.DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:6543/postgres?connection_limit=1");
+}
+
+export type DatabaseConfiguration = {
+  configured: boolean;
+  connectionString?: string;
+  message: string;
+};
+
+export class DatabaseConfigurationError extends Error {
+  code = "DATABASE_CONFIG_INVALID" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "DatabaseConfigurationError";
+  }
+}
+
+export function getDatabaseConfiguration(value = process.env.DATABASE_URL): DatabaseConfiguration {
+  if (!value?.trim()) {
+    return { configured: false, message: "DATABASE_URL is missing. Configure the Supabase pooler URL before enabling database-backed workflows." };
+  }
+  try {
+    const url = new URL(value);
+    if (!["postgres:", "postgresql:"].includes(url.protocol)) {
+      return { configured: false, message: "DATABASE_URL must use a PostgreSQL connection string." };
+    }
+    if (!url.hostname || isPlaceholderHost(url.hostname)) {
+      return { configured: false, message: "DATABASE_URL contains a placeholder Supabase host. Replace it with the real pooler hostname." };
+    }
+    const sslMode = url.searchParams.get("sslmode");
+    if (sslMode === "require" || sslMode === "prefer") {
+      // Supabase pooler URLs use libpq-style TLS. Without this flag, pg treats
+      // sslmode=require as verify-full and rejects the pooler's certificate chain.
+      url.searchParams.set("uselibpqcompat", "true");
+    }
+    return { configured: true, connectionString: url.toString(), message: "Database connection string is configured." };
+  } catch {
+    return { configured: false, message: "DATABASE_URL is invalid. Configure a valid Supabase PostgreSQL pooler URL." };
+  }
+}
+
+export function assertDatabaseConfigured() {
+  const config = getDatabaseConfiguration();
+  if (!config.configured || !config.connectionString) throw new DatabaseConfigurationError(config.message);
+  return config.connectionString;
+}
+
+function normalizeDatabaseUrl(value: string) {
+  return getDatabaseConfiguration(value).connectionString ?? value;
+}
+
+function isPlaceholderHost(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return normalized.includes("xxx") || normalized.includes("placeholder") || normalized.includes("your-") || normalized === "example.com";
 }
 
 export function getServerEnv(): ServerEnv {
@@ -55,8 +109,9 @@ export function getServerEnv(): ServerEnv {
 }
 
 export function getSafeEnvStatus() {
+  const database = getDatabaseConfiguration();
   return {
-    databaseUrl: process.env.DATABASE_URL ? "configured" : "missing",
+    databaseUrl: database.configured ? "configured" : "invalid_or_missing",
     directUrl: process.env.DIRECT_URL ? "configured" : "missing",
     openaiApiKey: process.env.OPENAI_API_KEY ? maskSecret(process.env.OPENAI_API_KEY) : "",
     geminiApiKey: process.env.GEMINI_API_KEY ? maskSecret(process.env.GEMINI_API_KEY) : "",

@@ -3,6 +3,7 @@ import type { AffiliateProductInsightDto, IntelligenceRecommendationDto, Intelli
 const opportunityKey = "saved_opportunities";
 const campaignKey = "affiliate_campaigns";
 const generatedContentKey = "affiliate_generated_content";
+const generatedPlanKey = "affiliate_generated_plans";
 const legacyOpportunityKey = "open-director:saved-opportunities";
 const legacyCampaignKey = "open-director:affiliate-campaigns";
 
@@ -48,6 +49,12 @@ export type AffiliateCampaignDraft = {
   id: string;
   campaignName: string;
   productName: string;
+  targetAudience?: string;
+  contentObjective?: string;
+  targetPlatforms?: string[];
+  budget?: string;
+  affiliateAccountIds?: string[];
+  affiliateAccounts?: AffiliateAccountDto[];
   platform: string;
   category: string;
   trendScore: number;
@@ -58,11 +65,28 @@ export type AffiliateCampaignDraft = {
   source: string;
   sourceUrl?: string;
   notes: string;
-  status: "draft";
+  status: "draft" | "testing" | "active" | "winner" | "paused";
   dataSource?: "database" | "local";
   isDemo: boolean;
   createdAt: string;
 };
+
+export type AffiliateAccountDto = {
+  id: string;
+  programId?: string | null;
+  platform: string;
+  accountName: string;
+  handle: string;
+  niche: string;
+  role: string;
+  status: string;
+  affiliateDashboardUrl?: string;
+  affiliateLink?: string;
+  commissionInfo: string;
+  notes: string;
+};
+
+export type AffiliateCampaignInput = Omit<AffiliateCampaignDraft, "id" | "createdAt" | "status"> & { status?: AffiliateCampaignDraft["status"] };
 
 export type AffiliateContentKit = {
   campaignId: string;
@@ -76,6 +100,8 @@ export type AffiliateContentKit = {
   captions: string[];
   hashtags: string[];
   ctas: string[];
+  voiceOverScripts: string[];
+  scenePlans: string[];
   videoPrompts: string[];
   updatedAt: string;
 };
@@ -121,16 +147,20 @@ export function saveOpportunity(input: Omit<SavedOpportunity, "id" | "createdAt"
 export function getCampaignDrafts() {
   return readLocal<AffiliateCampaignDraft>(campaignKey, legacyCampaignKey).map((campaign) => ({
     ...campaign,
-    campaignName: campaign.campaignName ?? `${campaign.productName} Campaign`
+    campaignName: campaign.campaignName ?? `${campaign.productName} Campaign`,
+    targetAudience: campaign.targetAudience ?? "",
+    contentObjective: campaign.contentObjective ?? "",
+    targetPlatforms: campaign.targetPlatforms ?? [],
+    affiliateAccountIds: campaign.affiliateAccountIds ?? []
   }));
 }
 
 // TODO: migrate local campaign drafts to a database model after the affiliate workflow is validated.
-export function createCampaignDraft(input: Omit<AffiliateCampaignDraft, "id" | "createdAt" | "status">) {
+export function createCampaignDraft(input: AffiliateCampaignInput) {
   const current = getCampaignDrafts();
   const existing = current.find((item) => item.productName === input.productName && item.platform === input.platform);
   if (existing) return existing;
-  const campaign: AffiliateCampaignDraft = { ...input, id: localId("campaign"), createdAt: new Date().toISOString(), status: "draft", dataSource: "local" };
+  const campaign: AffiliateCampaignDraft = { ...input, id: localId("campaign"), createdAt: new Date().toISOString(), status: input.status ?? "draft", dataSource: "local" };
   writeLocal(campaignKey, [campaign, ...current]);
   return campaign;
 }
@@ -158,6 +188,16 @@ export function saveGeneratedContent(kit: AffiliateContentKit) {
   const current = readLocal<AffiliateContentKit>(generatedContentKey);
   writeLocal(generatedContentKey, [kit, ...current.filter((item) => item.campaignId !== kit.campaignId)]);
   return kit;
+}
+
+export function markAffiliatePlanReady(campaignId: string) {
+  if (typeof window === "undefined") return;
+  const campaignIds = readLocal<string>(generatedPlanKey);
+  writeLocal(generatedPlanKey, [...new Set([campaignId, ...campaignIds])]);
+}
+
+export function isAffiliatePlanReady(campaignId: string) {
+  return readLocal<string>(generatedPlanKey).includes(campaignId);
 }
 
 export function studioHref(context: StudioInsightContext) {
@@ -246,7 +286,7 @@ export function campaignTemplates(campaign: AffiliateCampaignDraft) {
 export function defaultCampaignInsight(campaign: AffiliateCampaignDraft) {
   return {
     problem: `Aktivitas harian terasa lebih lambat tanpa solusi praktis untuk kategori ${campaign.category}.`,
-    targetAudience: `Pembeli pemula yang mencari produk ${campaign.category.toLowerCase()} praktis dengan harga terjangkau.`,
+    targetAudience: campaign.targetAudience || `Pembeli pemula yang mencari produk ${campaign.category.toLowerCase()} praktis dengan harga terjangkau.`,
     mainBenefit: `${campaign.productName} membantu menyederhanakan aktivitas harian dengan penggunaan yang mudah.`,
     contentAngle: `Tampilkan masalah nyata, demo singkat ${campaign.productName}, lalu arahkan penonton ke keranjang kuning.`,
     riskNote: `${campaign.competitionLevel} competition. Gunakan demo produk yang jelas agar konten tidak terasa generik.`
@@ -260,6 +300,7 @@ export function generateContentKit(campaign: AffiliateCampaignDraft, previous?: 
   const mainBenefit = previous?.mainBenefit ?? insight.mainBenefit;
   const tone = previous?.tone ?? "Helpful and direct";
   const contentAngle = previous?.contentAngle ?? insight.contentAngle;
+  const ctas = platformCtas(campaign.targetPlatforms?.length ? campaign.targetPlatforms : [campaign.platform]);
   return {
     campaignId: campaign.id,
     targetAudience,
@@ -288,13 +329,9 @@ export function generateContentKit(campaign: AffiliateCampaignDraft, previous?: 
       `#AffiliateIndonesia #ReviewProduk #${campaign.category.replaceAll(" ", "")}`,
       `#KeranjangKuning #RekomendasiProduk #${campaign.category.replaceAll(" ", "")}`
     ],
-    ctas: previous?.ctas ?? [
-      "Cek produknya di keranjang kuning.",
-      "Klik link sebelum stok habis.",
-      "Simpan video ini kalau kamu butuh rekomendasi produk praktis.",
-      "Lihat detail produknya sebelum checkout.",
-      "Klik produk untuk cek promo yang tersedia."
-    ],
+    ctas: previous?.ctas ?? ctas,
+    voiceOverScripts: previous?.voiceOverScripts ?? [`Pernah merasa aktivitas harian jadi ribet? ${campaign.productName} bisa membantu dengan cara yang praktis. Lihat demonya, cek manfaatnya, lalu ${ctas[0].toLowerCase()}`],
+    scenePlans: previous?.scenePlans ?? ["Scene 1: tampilkan masalah audience dalam 2-3 detik.", `Scene 2: close-up ${campaign.productName}.`, "Scene 3: demo pemakaian dan benefit utama.", `Scene 4: tampilkan CTA: ${ctas[0]}`],
     videoPrompts: previous?.videoPrompts ?? [
       `Buat video affiliate vertikal 15 detik untuk ${campaign.productName}. Highlight problem-solution, demo benefit utama, dan CTA klik keranjang kuning.`,
       `Buat video review ${campaign.productName} dengan opening masalah, close-up produk, demo pemakaian, lalu CTA singkat.`,
@@ -302,4 +339,15 @@ export function generateContentKit(campaign: AffiliateCampaignDraft, previous?: 
     ],
     updatedAt: new Date().toISOString()
   };
+}
+
+function platformCtas(platforms: string[]) {
+  const values = platforms.map((item) => item.toLowerCase());
+  const ctas: string[] = [];
+  if (values.some((item) => item.includes("youtube"))) ctas.push("Like, subscribe, comment, dan watch next.");
+  if (values.some((item) => item.includes("tiktok"))) ctas.push("Follow, like, save, comment, dan cek keranjang kuning jika relevan.");
+  if (values.some((item) => item.includes("instagram"))) ctas.push("Save, share, follow, DM, dan comment untuk detail produk.");
+  if (values.some((item) => item.includes("facebook"))) ctas.push("Share, comment, follow page, dan hubungi WhatsApp atau contact jika relevan.");
+  if (!ctas.length) ctas.push("Klik affiliate link untuk melihat detail produk dan promo yang tersedia.");
+  return ctas;
 }

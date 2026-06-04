@@ -16,7 +16,7 @@ export function FeatureCards() {
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {features.map((feature) => (
-          <Link key={feature.title} href={feature.href} className={`group rounded-2xl border border-white/[0.07] bg-gradient-to-br ${feature.colors} p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-cyan-300/25`}>
+          <Link key={feature.title} href={feature.href} className={`group h-full rounded-2xl border border-white/[0.07] bg-gradient-to-br ${feature.colors} p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:border-cyan-300/25`}>
             <div className="flex items-start justify-between gap-3">
               <div className="grid h-11 w-11 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.06]"><feature.icon className={`h-5 w-5 ${feature.iconColor}`} /></div>
               <ArrowUpRight className="h-4 w-4 text-slate-600 transition group-hover:text-cyan-200" />

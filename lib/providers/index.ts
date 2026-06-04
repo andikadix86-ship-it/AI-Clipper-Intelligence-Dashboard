@@ -8,6 +8,10 @@ import { openaiProvider } from "@/lib/providers/openai";
 import { pikaProvider } from "@/lib/providers/pika";
 import { runwayProvider } from "@/lib/providers/runway";
 import type { AIProviderAdapter } from "@/lib/providers/types";
+import { serverLogger } from "@/lib/server-logger";
+import { providerEnvironmentKey } from "@/lib/provider-environment";
+
+export { providerEnvironmentKey } from "@/lib/provider-environment";
 
 const adapters: Record<AIProviderName, AIProviderAdapter> = {
   GEMINI_VEO: geminiProvider,
@@ -39,26 +43,19 @@ export function maskApiKey(key?: string | null) {
 
 export type ProviderCredentialSource = "database" | "env" | "none";
 
-function envApiKey(providerName: AIProviderName) {
-  if (providerName === "OPENAI_SORA") return process.env.OPENAI_API_KEY ?? "";
-  if (providerName === "GEMINI_VEO") return process.env.GEMINI_API_KEY ?? "";
-  return "";
-}
-
 export async function resolveProviderCredential(providerName: AIProviderName) {
   let provider: Awaited<ReturnType<typeof loadProviderCredential>> = null;
   try {
     provider = await loadProviderCredential(providerName);
   } catch (error) {
-    console.error("[providers] Database unavailable while resolving provider credential.", error);
+    serverLogger.warn("providers.credential.database_fallback", { provider: providerName }, error);
   }
   const databaseKey = decodeApiKey(provider?.credentials[0]?.apiKeyEncrypted ?? provider?.apiKey);
-  const environmentKey = envApiKey(providerName);
+  const environmentKey = providerEnvironmentKey(providerName);
   const source: ProviderCredentialSource = databaseKey ? "database" : environmentKey ? "env" : "none";
   const apiKey = databaseKey || environmentKey;
 
-  // Temporary provider diagnostics. Never print credentials or masked fragments.
-  console.info("[provider-debug] credential resolution", {
+  serverLogger.info("providers.credential.resolved", {
     provider: providerName,
     providerFound: Boolean(provider),
     apiKeyFound: Boolean(apiKey),
@@ -83,7 +80,8 @@ function loadProviderCredential(providerName: AIProviderName) {
 export async function getProviderRuntime(providerName: AIProviderName, requestedMode?: ProviderMode) {
   const { provider, apiKey, source } = await resolveProviderCredential(providerName);
   const mode = requestedMode ?? provider?.mode ?? "DUMMY";
-  const safeMode: ProviderMode = mode === "REAL" && apiKey && provider?.isActive ? "REAL" : "DUMMY";
+  const providerEnabled = provider?.isActive ?? source === "env";
+  const safeMode: ProviderMode = mode === "REAL" && apiKey && providerEnabled ? "REAL" : "DUMMY";
   return {
     adapter: adapters[providerName] ?? dummyProvider,
     apiKey,

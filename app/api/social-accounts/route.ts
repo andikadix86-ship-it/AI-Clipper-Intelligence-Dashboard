@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { encodeSecret } from "@/lib/security";
 import { mapSocialAccount } from "@/lib/social-account-service";
+import { serverLogger } from "@/lib/server-logger";
 import type { AuthStatus, PublishMode, SocialConnectionStatus, SocialPlatform, UploadMethod } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -43,7 +44,7 @@ export async function GET() {
     const countMap = new Map(contentByProject.map((item) => [item.projectId, item._count._all]));
     return NextResponse.json({ accounts: accounts.map((account) => mapSocialAccount(account, countMap)) });
   } catch (error) {
-    console.error("[social-accounts] Database unavailable while loading social accounts.", error);
+    serverLogger.warn("social_accounts.list.database_fallback", undefined, error);
     return NextResponse.json({ accounts: [], source: "fallback", message: "Database unavailable, using empty social account list." });
   }
 }

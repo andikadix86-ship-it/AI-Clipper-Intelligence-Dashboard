@@ -6,8 +6,9 @@ import clsx from "clsx";
 import { Archive, CalendarClock, CheckCircle2, Copy, FileText, Film, FolderPlus, Grid2X2, ImageIcon, Layers3, Library, Lightbulb, List, PlaySquare, RotateCcw, Search, Send, ThumbsDown, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { assetStatusBadgeClasses, fallbackLibraryItems, statusBadgeClasses } from "@/lib/content-library";
+import { assetStatusBadgeClasses, statusBadgeClasses } from "@/lib/content-library";
 import type { AssetCollectionDto, ContentStatus, LibraryAssetStatus, LibraryItemDto } from "@/lib/types";
+import { EmptyCard, ErrorCard } from "@/components/state-cards";
 
 const icons = {
   CLIP: Film,
@@ -21,13 +22,14 @@ const icons = {
 };
 
 export default function LibraryPage() {
-  const [items, setItems] = useState<LibraryItemDto[]>(fallbackLibraryItems);
+  const [items, setItems] = useState<LibraryItemDto[]>([]);
   const [collections, setCollections] = useState<AssetCollectionDto[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [modal, setModal] = useState<{ type: "approve" | "reject"; item: LibraryItemDto } | null>(null);
   const [approvalText, setApprovalText] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [collectionForm, setCollectionForm] = useState({ name: "", description: "", projectId: "" });
   const [filters, setFilters] = useState({
@@ -49,14 +51,19 @@ export default function LibraryPage() {
   }, []);
 
   async function loadLibrary() {
+    setLoading(true);
+    setLibraryError(null);
     try {
       const response = await fetch("/api/library");
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Gagal memuat Content Library.");
-      setItems(data.items?.length ? data.items : fallbackLibraryItems);
-      if (data.warning) setToast({ type: "error", message: data.warning });
+      setItems(Array.isArray(data.items) ? data.items : []);
+      if (data.warning) setLibraryError(data.warning);
     } catch (error) {
-      setToast({ type: "error", message: error instanceof Error ? error.message : "Gagal memuat Content Library." });
+      setItems([]);
+      setLibraryError(error instanceof Error ? error.message : "Gagal memuat Content Library.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -96,7 +103,7 @@ export default function LibraryPage() {
       items.filter((item) => {
         const query = filters.search.trim().toLowerCase();
         return (
-          (!query || `${item.title} ${item.description} ${item.caption} ${item.originalPrompt ?? ""} ${item.tags.join(" ")}`.toLowerCase().includes(query)) &&
+          (!query || `${item.title ?? ""} ${item.description ?? ""} ${item.caption ?? ""} ${item.originalPrompt ?? ""} ${(item.tags ?? []).join(" ")}`.toLowerCase().includes(query)) &&
           (filters.project === "All" || item.project === filters.project) &&
           (filters.socialAccount === "All" || item.socialAccount === filters.socialAccount) &&
           (filters.type === "All" || item.typeLabel === filters.type) &&
@@ -136,6 +143,9 @@ export default function LibraryPage() {
           </button>
         </div>
       </header>
+
+      {libraryError ? <ErrorCard title="Content Library fallback aktif" description={libraryError} action={{ label: "Buka Clipper Workflow", href: "/clipper" }} /> : null}
+      {loading ? <div className="glass rounded-2xl p-5 text-sm text-slate-300">Memuat Content Library...</div> : null}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <div className="glass rounded-2xl p-4">
@@ -261,19 +271,7 @@ export default function LibraryPage() {
         </section>
       )}
 
-      {!visibleItems.length ? (
-        <div className="glass grid min-h-72 place-items-center rounded-2xl p-8 text-center">
-          <div>
-            <Library className="mx-auto mb-4 h-10 w-10 text-teal-300" />
-            <h2 className="text-xl font-semibold text-white">Belum ada asset</h2>
-            <p className="mt-2 max-w-md text-sm text-slate-400">Mulai dari Trending Center, Clipper Workflow, atau Creative Studio untuk membuat asset Draft.</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-3">
-              <Link href="/trending-center" className="rounded-xl bg-teal-300 px-4 py-2 text-sm font-semibold text-slate-950">Open Trending Center</Link>
-              <Link href="/clipper" className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white">Generate Clip</Link>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {!loading && !visibleItems.length ? <EmptyCard title="Belum ada asset" description="Upload video, jalankan AI Analysis, atau generate metadata dari Clipper Workflow. Hasil tersimpan akan muncul di sini." action={{ label: "Generate Clip", href: "/clipper" }} /> : null}
 
       {modal ? <ConfirmModal type={modal.type} item={modal.item} value={approvalText} onChange={setApprovalText} onCancel={() => setModal(null)} onConfirm={confirmApproval} /> : null}
     </div>

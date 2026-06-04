@@ -2,6 +2,7 @@ import { apiError, apiSuccess } from "@/lib/api-response";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getIntelligenceProviderSettings, saveYouTubeDataApiKey } from "@/lib/intelligence/provider-settings";
 import { getRedditOAuthStatus } from "@/lib/intelligence/reddit-oauth";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,7 @@ export async function GET() {
     const settings = await getIntelligenceProviderSettings();
     return apiSuccess("Intelligence provider settings loaded.", { settings }, { settings });
   } catch (error) {
-    console.error("[settings] Database unavailable while loading intelligence provider settings.", error);
+    serverLogger.warn("settings.intelligence_providers.database_fallback", undefined, error);
     const youtubeKey = process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_DATA_API_KEY || "";
     const reddit = getRedditOAuthStatus();
     const settings = [

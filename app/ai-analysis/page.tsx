@@ -8,7 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { socialPlatformLabels } from "@/lib/content-library";
 import { studioHref } from "@/lib/intelligence/action-flow";
 import { RecentAnalysisList } from "@/components/recent-analysis-list";
-import type { ContentType, ProjectDto, SocialPlatform } from "@/lib/types";
+import type { AIProviderName, ContentType, ProjectDto, ProviderMode, SocialPlatform } from "@/lib/types";
 
 type TrendInput = {
   niche: string;
@@ -35,6 +35,7 @@ type AnalysisForm = {
   title: string;
   hook: string;
   caption: string;
+  description: string;
   hashtag: string;
   cta: string;
   targetAudience: string;
@@ -44,6 +45,8 @@ type AnalysisForm = {
   fypScore: number;
   postingTimeRecommendation: string;
   notes: string;
+  providerMode: ProviderMode;
+  providerWarning?: string;
 };
 
 type SocialAccountOption = { id: string; name: string; projectId?: string; status?: string; isActive?: boolean };
@@ -66,6 +69,7 @@ const emptyAnalysis: AnalysisForm = {
   title: "",
   hook: "",
   caption: "",
+  description: "",
   hashtag: "",
   cta: "",
   targetAudience: "",
@@ -74,7 +78,8 @@ const emptyAnalysis: AnalysisForm = {
   duration: 30,
   fypScore: 80,
   postingTimeRecommendation: "",
-  notes: ""
+  notes: "",
+  providerMode: "DUMMY"
 };
 
 export default function AIAnalysisPage() {
@@ -94,6 +99,8 @@ function AIAnalysisContent() {
   const [projectId, setProjectId] = useState("");
   const [socialAccountId, setSocialAccountId] = useState("");
   const [contentType, setContentType] = useState<ContentType>("CLIP_PLAN");
+  const [provider, setProvider] = useState<AIProviderName>("GEMINI_VEO");
+  const [providerMode, setProviderMode] = useState<ProviderMode>("DUMMY");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -163,7 +170,7 @@ function AIAnalysisContent() {
         const loadedProjects = projectData.projects ?? [];
         setProjects(loadedProjects);
         setProjectId(loadedProjects[0]?.id ?? "");
-        setSocialAccounts((accountData.accounts ?? []).filter((account: SocialAccountOption) => account.isActive !== false && account.status !== "DISABLED"));
+        setSocialAccounts((Array.isArray(accountData.accounts) ? accountData.accounts : []).filter((account: SocialAccountOption) => account.isActive !== false && account.status !== "DISABLED"));
       })
       .catch(() => setToast({ type: "error", message: "Project atau Social Account gagal dimuat." }));
   }, []);
@@ -184,24 +191,29 @@ function AIAnalysisContent() {
       const response = await fetch("/api/ai-analysis/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(trend)
+        body: JSON.stringify({ ...trend, provider, mode: providerMode })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Analysis gagal dibuat.");
+      if (!response.ok) throw new Error(data.message ?? data.error ?? "Analysis gagal dibuat.");
+      if (!data.analysis) throw new Error("Response analysis tidak lengkap.");
       setAnalysis({
-        title: data.analysis.viralTitle,
-        hook: data.analysis.hook,
-        caption: data.analysis.caption,
-        hashtag: data.analysis.hashtag,
-        cta: data.analysis.cta,
-        targetAudience: data.analysis.targetAudience,
-        contentAngle: data.analysis.contentAngle,
-        editingStyle: data.analysis.editingStyle,
-        duration: data.analysis.suggestedDuration,
-        fypScore: data.analysis.fypScore,
-        postingTimeRecommendation: data.analysis.postingTimeRecommendation,
-        notes: data.analysis.notes
+        title: data.analysis.viralTitle ?? "",
+        hook: data.analysis.hook ?? "",
+        caption: data.analysis.caption ?? "",
+        description: data.analysis.description ?? "",
+        hashtag: data.analysis.hashtag ?? "",
+        cta: data.analysis.cta ?? "",
+        targetAudience: data.analysis.targetAudience ?? "",
+        contentAngle: data.analysis.contentAngle ?? "",
+        editingStyle: data.analysis.editingStyle ?? "",
+        duration: data.analysis.suggestedDuration ?? 30,
+        fypScore: data.analysis.fypScore ?? 0,
+        postingTimeRecommendation: data.analysis.postingTimeRecommendation ?? "",
+        notes: data.analysis.notes ?? "",
+        providerMode: data.analysis.providerMode === "REAL" ? "REAL" : "DUMMY",
+        providerWarning: data.analysis.providerWarning
       });
+      if (data.analysis.providerWarning) setToast({ type: "error", message: data.analysis.providerWarning });
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Analysis gagal dibuat." });
     } finally {
@@ -284,6 +296,21 @@ function AIAnalysisContent() {
               <Info label="Confidence" value={`${trend.confidence ?? 25}%`} />
               <Info label="Collected" value={trend.collectedAt ? new Date(trend.collectedAt).toLocaleString("id-ID") : "Sample timestamp not available"} />
             </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Field label="AI Provider">
+                <select value={provider} onChange={(event) => setProvider(event.target.value as AIProviderName)} className="premium-input px-4 py-3">
+                  <option value="GEMINI_VEO">Gemini</option>
+                  <option value="OPENAI_SORA">OpenAI</option>
+                  <option value="MANUAL_UPLOAD">Dummy / Manual</option>
+                </select>
+              </Field>
+              <Field label="Provider Mode">
+                <select value={providerMode} onChange={(event) => setProviderMode(event.target.value as ProviderMode)} className="premium-input px-4 py-3">
+                  <option value="DUMMY">Dummy explicit</option>
+                  <option value="REAL">Real strict</option>
+                </select>
+              </Field>
+            </div>
             <button type="button" onClick={generateAnalysis} disabled={loading} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               Regenerate Analysis
@@ -325,12 +352,19 @@ function AIAnalysisContent() {
         </div>
 
         <div className="glass rounded-2xl p-5">
-          <h2 className="mb-4 text-xl font-semibold text-white">Editable Recommendation</h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-white">Editable Recommendation</h2>
+            <span className={clsx("rounded-full px-3 py-1 text-xs font-semibold", analysis.providerMode === "REAL" ? "bg-teal-300 text-slate-950" : "bg-amber-300/15 text-amber-100")}>
+              {analysis.providerMode === "REAL" ? "REAL Provider" : "DUMMY Explicit"}
+            </span>
+          </div>
+          {analysis.providerWarning ? <div className="mb-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-sm text-amber-100">{analysis.providerWarning}</div> : null}
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Title"><input value={analysis.title} onChange={(e) => setAnalysis({ ...analysis, title: e.target.value })} className="premium-input px-4 py-3" /></Field>
             <Field label="Suggested duration"><input type="number" value={analysis.duration} onChange={(e) => setAnalysis({ ...analysis, duration: Number(e.target.value) })} className="premium-input px-4 py-3" /></Field>
             <Field label="Hook 3 detik pertama"><textarea value={analysis.hook} onChange={(e) => setAnalysis({ ...analysis, hook: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>
             <Field label="Caption"><textarea value={analysis.caption} onChange={(e) => setAnalysis({ ...analysis, caption: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>
+            <Field label="Description"><textarea value={analysis.description} onChange={(e) => setAnalysis({ ...analysis, description: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>
             <Field label="Hashtag"><input value={analysis.hashtag} onChange={(e) => setAnalysis({ ...analysis, hashtag: e.target.value })} className="premium-input px-4 py-3" /></Field>
             <Field label="CTA"><input value={analysis.cta} onChange={(e) => setAnalysis({ ...analysis, cta: e.target.value })} className="premium-input px-4 py-3" /></Field>
             <Field label="Target audience"><textarea value={analysis.targetAudience} onChange={(e) => setAnalysis({ ...analysis, targetAudience: e.target.value })} rows={3} className="premium-input px-4 py-3" /></Field>

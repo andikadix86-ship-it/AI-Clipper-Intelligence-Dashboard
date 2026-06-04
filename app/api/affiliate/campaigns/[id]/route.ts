@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   try {
-    const campaign = await withTimeout(prisma.affiliateCampaign.findUnique({ where: { id: params.id }, include: { generatedContent: { orderBy: { createdAt: "asc" } } } }));
+    const campaign = await withTimeout(prisma.affiliateCampaign.findUnique({ where: { id: params.id }, include: { generatedContent: { orderBy: { createdAt: "asc" } }, campaignAccounts: { include: { affiliateAccount: true } } } }));
     return campaign ? apiSuccess("Campaign loaded.", { campaign }, { campaign }) : apiError("Campaign tidak ditemukan.", 404);
   } catch { return apiError("Database belum tersedia. Campaign lokal tetap dapat digunakan.", 503); }
 }

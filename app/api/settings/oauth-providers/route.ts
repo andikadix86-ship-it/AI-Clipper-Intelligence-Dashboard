@@ -1,6 +1,7 @@
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getOAuthProviderSetting, saveOAuthProviderSetting, type OAuthProvider } from "@/lib/oauth-provider-service";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -11,7 +12,7 @@ export async function GET() {
     const settings = await Promise.all(providers.map((provider) => getOAuthProviderSetting(provider)));
     return apiSuccess("OAuth provider settings loaded.", { settings }, { settings });
   } catch (error) {
-    console.error("[settings] Database unavailable while loading OAuth provider settings.", error);
+    serverLogger.warn("settings.oauth_providers.database_fallback", undefined, error);
     const settings = providers.map((provider) => {
       const prefix = provider === "TIKTOK" ? "TIKTOK" : "META";
       const clientId = process.env[provider === "TIKTOK" ? "TIKTOK_CLIENT_KEY" : "META_APP_ID"];

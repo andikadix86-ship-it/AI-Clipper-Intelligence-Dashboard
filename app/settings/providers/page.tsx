@@ -163,37 +163,47 @@ export default function SettingsPage() {
     const provider = providerFor(name);
     setSaving(name);
     setMessage(null);
-    const response = await fetch("/api/providers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...provider, apiKey: keys[name] })
-    });
-    const data = await response.json();
-    setSaving(null);
-    if (!response.ok) {
-      setMessage(data.error ?? "Provider could not be saved.");
-      return;
+    try {
+      const response = await fetch("/api/providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...provider, apiKey: keys[name] })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error ?? "Provider could not be saved.");
+        return;
+      }
+      updateProvider(name, data.provider ?? data.data?.provider ?? provider);
+      setKeys((current) => ({ ...current, [name]: "" }));
+      setMessage(data.warning ?? `${providerLabels[name]} saved. API key is hidden after save.`);
+      await Promise.all([loadProviders(), loadProviderStatus()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Provider could not be saved.");
+    } finally {
+      setSaving(null);
     }
-    updateProvider(name, data.provider);
-    setKeys((current) => ({ ...current, [name]: "" }));
-    setMessage(data.warning ?? `${providerLabels[name]} saved. API key is hidden after save.`);
-    await Promise.all([loadProviders(), loadProviderStatus()]);
   }
 
   async function testProvider(name: AIProviderName) {
     const provider = providerFor(name);
     setSaving(`test:${name}`);
     setMessage(null);
-    const response = await fetch("/api/providers/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider: name, mode: provider.mode ?? "DUMMY" })
-    });
-    const data = await response.json();
-    setSaving(null);
-    const result = data.result ?? data.data?.result ?? data;
-    setMessage(response.ok ? `${providerLabels[name]} test: ${result.status}. ${result.warning ?? result.message ?? ""}` : data.error ?? "Provider test failed.");
-    await Promise.all([loadProviders(), loadProviderStatus()]);
+    try {
+      const response = await fetch("/api/providers/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: name, mode: provider.mode ?? "DUMMY" })
+      });
+      const data = await response.json().catch(() => ({}));
+      const result = data.result ?? data.data?.result ?? {};
+      setMessage(response.ok ? `${providerLabels[name]} test: ${result.status ?? "Unknown"}. ${result.warning ?? result.message ?? ""}` : data.error ?? "Provider test failed.");
+      await Promise.all([loadProviders(), loadProviderStatus()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Provider test failed.");
+    } finally {
+      setSaving(null);
+    }
   }
 
   async function runProviderTest(target: TestTarget) {

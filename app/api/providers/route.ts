@@ -4,7 +4,7 @@ import { defaultProviders } from "@/lib/dummy-creative";
 import { withTimeout } from "@/lib/db-timeout";
 import { prisma } from "@/lib/prisma";
 import { providerStatusForSave, resolvedProviderStatus } from "@/lib/provider-status";
-import { encodeApiKey, maskApiKey, resolveProviderCredential } from "@/lib/providers";
+import { encodeApiKey, maskApiKey, providerEnvironmentKey, resolveProviderCredential } from "@/lib/providers";
 import { maskSecret } from "@/lib/security";
 import type { AIProviderName, ProviderMode } from "@/lib/types";
 
@@ -15,17 +15,20 @@ export async function GET() {
     const providers = await withTimeout(prisma.aIProvider.findMany({ orderBy: { name: "asc" }, include: { credentials: { orderBy: { updatedAt: "desc" }, take: 1 } } }), 4000);
     const sanitized = providers.map(({ apiKey: _apiKey, credentials, ...provider }) => {
       const storedKey = credentials[0]?.apiKeyEncrypted ?? _apiKey;
+      const environmentKey = providerEnvironmentKey(provider.name);
+      const hasApiKey = Boolean(storedKey || environmentKey);
       return {
         ...provider,
-        providerStatus: resolvedProviderStatus({ mode: provider.mode, hasApiKey: Boolean(storedKey), lastTestStatus: provider.lastTestStatus }),
+        providerStatus: resolvedProviderStatus({ mode: provider.mode, hasApiKey, lastTestStatus: provider.lastTestStatus }),
         lastTestAt: provider.lastTestAt?.toISOString(),
-        apiKeyMasked: maskApiKey(storedKey)
+        apiKeyMasked: storedKey ? maskApiKey(storedKey) : environmentKey ? "env_***set" : ""
       };
     });
-    const data = sanitized.length ? sanitized : defaultProviders;
+    const data = sanitized.length ? sanitized : fallbackProviders();
     return apiSuccess("Providers loaded.", { providers: data }, { providers: data });
   } catch {
-    return apiSuccess("Providers loaded from dummy fallback.", { providers: defaultProviders }, { providers: defaultProviders });
+    const providers = fallbackProviders();
+    return apiSuccess("Database unavailable, using provider environment fallback.", { providers }, { providers });
   }
 }
 
@@ -109,4 +112,19 @@ export async function POST(request: Request) {
   } catch (error) {
     return apiError("Provider settings could not be saved to Supabase.", 500, error);
   }
+}
+
+function fallbackProviders() {
+  return defaultProviders.map((provider) => {
+    const hasEnvironmentKey = Boolean(providerEnvironmentKey(provider.name));
+    if (!hasEnvironmentKey) return provider;
+    return {
+      ...provider,
+      status: "CONNECTED" as const,
+      providerStatus: "CONFIGURED" as const,
+      mode: "REAL" as const,
+      apiKeyMasked: "env_***set",
+      isActive: true
+    };
+  });
 }

@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-06-02T13:32:45.755Z",
+  "target_coverage": {
+    "automated": "80%",
+    "manual": "20%"
+  },
+  "summary": {
+    "PASS": 18,
+    "WARNING": 1,
+    "FAIL": 0
+  },
+  "blockers": [],
+  "recommendations": [
+    "Restore Supabase connectivity before enabling database-backed production workflows."
+  ],
+  "checks": [
+    {
+      "name": "Sidebar route inventory",
+      "status": "PASS",
+      "detail": "12 sidebar pages are present."
+    },
+    {
+      "name": "API endpoint inventory",
+      "status": "PASS",
+      "detail": "144 API route handlers have exported methods."
+    },
+    {
+      "name": "Gemini real adapter",
+      "status": "PASS",
+      "detail": "Mocked REAL mode returned a Gemini response."
+    },
+    {
+      "name": "Gemini fallback adapter",
+      "status": "PASS",
+      "detail": "Missing API key produces API_KEY_MISSING for engine fallback."
+    },
+    {
+      "name": "Structured engine contracts",
+      "status": "PASS",
+      "detail": "All core engines and orchestration returned structured outputs."
+    },
+    {
+      "name": "Engine score bounds",
+      "status": "PASS",
+      "detail": "All structured score fields remain within 0-100."
+    },
+    {
+      "name": "Supabase local fallback",
+      "status": "PASS",
+      "detail": "Knowledge Base used local JSON when database access was disabled."
+    },
+    {
+      "name": "Supabase memory fallback",
+      "status": "PASS",
+      "detail": "Memory fallback is available."
+    },
+    {
+      "name": "Telegram dummy approval",
+      "status": "PASS",
+      "detail": "Missing token uses dummy approval."
+    },
+    {
+      "name": "Telegram real adapter",
+      "status": "PASS",
+      "detail": "Mocked connected mode returned REAL metadata."
+    },
+    {
+      "name": "Notification fallback contract",
+      "status": "PASS",
+      "detail": "Notification fallback returns an empty list safely."
+    },
+    {
+      "name": "Production build",
+      "status": "PASS",
+      "detail": "npm run build completed successfully."
+    },
+    {
+      "name": "Production runtime",
+      "status": "PASS",
+      "detail": "Next.js production server is reachable on http://127.0.0.1:3017."
+    },
+    {
+      "name": "Runtime page routes",
+      "status": "PASS",
+      "detail": "12 sidebar routes return safe responses."
+    },
+    {
+      "name": "Supabase runtime fallback",
+      "status": "WARNING",
+      "detail": "Database is offline; /api/health returned a structured 503 while the app remains available."
+    },
+    {
+      "name": "Runtime safe APIs",
+      "status": "PASS",
+      "detail": "17 read endpoints return safe responses."
+    },
+    {
+      "name": "Runtime intelligence data APIs",
+      "status": "PASS",
+      "detail": "3 opportunity endpoints return structured responses."
+    },
+    {
+      "name": "Runtime notification fallback",
+      "status": "PASS",
+      "detail": "Notifications endpoint returned source=fallback."
+    },
+    {
+      "name": "Unhandled runtime errors",
+      "status": "PASS",
+      "detail": "No unhandled runtime exception signature was detected."
+    }
+  ]
+}

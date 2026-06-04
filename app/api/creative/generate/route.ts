@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { withTimeout } from "@/lib/db-timeout";
 import { prisma } from "@/lib/prisma";
 import { getProviderRuntime } from "@/lib/providers";
-import { buildCreativeFinalPrompt, promptPreview } from "@/lib/providers/prompt";
+import { buildCreativeFinalPrompt } from "@/lib/providers/prompt";
+import { serverLogger } from "@/lib/server-logger";
 import { writeAuditLog } from "@/lib/audit-log";
 import { createNotification } from "@/lib/notification-service";
 import type { AIProviderName, CreativeType, ProviderMode } from "@/lib/types";
@@ -53,11 +54,10 @@ export async function POST(request: Request) {
     motionPrompt: body.motionPrompt,
     apiKey: runtimeInfo.apiKey
   };
-  console.info("[generation-debug] request", {
+  serverLogger.info("creative.generate.request", {
     provider: requestedProvider,
     mode: runtimeInfo.mode,
-    generationType: body.type,
-    promptPreview: promptPreview(finalPrompt)
+    generationType: body.type
   });
   const providerResult =
     body.type === "IMAGE"
@@ -161,12 +161,11 @@ export async function POST(request: Request) {
       5000
     );
 
-    console.info("[generation-debug] completed", {
+    serverLogger.info("creative.generate.completed", {
       provider: requestedProvider,
       mode: providerResult.mode,
       generationType: body.type,
       model,
-      promptPreview: promptPreview(finalPrompt),
       isDummy,
       jobId: job.id,
       outputSource,
@@ -213,16 +212,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Creative generation could not be saved.";
-    console.info("[generation-debug] persistence failed", {
+    serverLogger.warn("creative.generate.persistence_fallback", {
       provider: requestedProvider,
       mode: providerResult.mode,
       generationType: body.type,
       model,
-      promptPreview: promptPreview(finalPrompt),
       isDummy,
       outputSource,
       errorMessage
-    });
+    }, error);
     const warning = `${generationError ? `${generationError} ` : ""}Preview generated, but database is unavailable. The asset was not saved to Content Library.`;
     return NextResponse.json({
       asset: {
@@ -240,14 +238,14 @@ export async function POST(request: Request) {
         model,
         generationType: body.type,
         mode: providerResult.mode,
-        isDummy: true,
-        outputSource: "dummy",
+        isDummy,
+        outputSource,
         finalPrompt,
         generationStatus: "PERSISTENCE_FALLBACK",
         warning
       },
       job: { status: "FALLBACK_PREVIEW", progress: 100, errorMessage: warning },
-      mode: "DUMMY",
+      mode: providerResult.mode,
       source: "fallback",
       warning,
       detail: errorMessage

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { GeneratedClipDto, Platform, PostingClipDetailDto, PrivacyStatus, ProjectDto, VideoPreview } from "@/lib/types";
+import { validateVideoUpload, videoUploadPolicy } from "@/lib/media/upload-policy";
 
 const platformOptions: Array<{ value: Platform; label: string; icon: typeof Youtube }> = [
   { value: "YOUTUBE", label: "YouTube", icon: Youtube },
@@ -97,7 +98,10 @@ export default function ClipperPage() {
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [mediaJob, setMediaJob] = useState<MediaJob | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [processing, setProcessing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisMode, setAnalysisMode] = useState<"DUMMY" | "REAL">("DUMMY");
   const [preview, setPreview] = useState<VideoPreview | null>(null);
   const [setting, setSetting] = useState(defaultSetting);
   const [activeTab, setActiveTab] = useState<TabId>("basic");
@@ -109,6 +113,7 @@ export default function ClipperPage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<"success" | "error" | "info">("info");
   const [schedule, setSchedule] = useState({
     socialAccountName: "Fatih",
     destination: "YOUTUBE" as Platform,
@@ -132,6 +137,10 @@ export default function ClipperPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => () => {
+    if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+  }, [uploadPreviewUrl]);
 
   async function loadPreview() {
     setLoadingPreview(true);
@@ -158,15 +167,14 @@ export default function ClipperPage() {
   async function uploadVideo() {
     if (!uploadFile) return;
     setUploading(true);
+    setUploadProgress(0);
     setMessage(null);
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
       formData.append("projectId", projectId);
       formData.append("platform", platform);
-      const response = await fetch("/api/media/upload", { method: "POST", body: formData });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Upload failed.");
+      const data = await uploadWithProgress(formData, setUploadProgress);
       setMediaJob(data.job);
       setPreview({
         id: data.videoSource.id,
@@ -176,11 +184,48 @@ export default function ClipperPage() {
         thumbnail: data.videoSource.thumbnail
       });
       setUrl(data.videoSource.url);
-      setMessage(data.warning ?? "Upload queued.");
+      setMessageTone("success");
+      setMessage(data.warning ?? "Upload berhasil dan metadata video tersimpan.");
     } catch (error) {
+      setMessageTone("error");
       setMessage(error instanceof Error ? error.message : "Upload failed.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function analyzeUploadedVideo() {
+    if (!preview?.id || preview.id.startsWith("preview_")) {
+      setMessageTone("error");
+      setMessage("Upload video terlebih dahulu sebelum menjalankan AI Analysis.");
+      return;
+    }
+    setAnalyzing(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/ai-analysis/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoSourceId: preview.id,
+          projectId,
+          niche: setting.category,
+          keyword: preview.title,
+          hashtag: "#FVNClipper",
+          platform: platform === "YOUTUBE" ? "YOUTUBE_SHORTS" : platform === "INSTAGRAM" ? "INSTAGRAM_REELS" : "TIKTOK",
+          provider: "GEMINI_VEO",
+          mode: analysisMode
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message ?? data.error ?? "AI Analysis gagal dijalankan.");
+      setMessageTone("success");
+      setMessage(`AI Analysis ${data.analysis?.providerMode ?? analysisMode} selesai. Draft metadata tersimpan di Content Library.`);
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "AI Analysis gagal dijalankan.");
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -225,13 +270,14 @@ export default function ClipperPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Generate failed.");
-      setClips(data.clips);
+      const generatedClips = Array.isArray(data.clips) ? data.clips as GeneratedClipDto[] : [];
+      setClips(generatedClips);
       if (data.jobs?.length) setMediaJob(data.jobs[data.jobs.length - 1]);
       setPreview((current) => (current ? { ...current, id: data.videoSourceId ?? current.id } : current));
       setSelectedIds([]);
       setPostingDetails(
         Object.fromEntries(
-          data.clips.map((clip: GeneratedClipDto) => [
+          generatedClips.map((clip: GeneratedClipDto) => [
             clip.id,
             {
               generatedClipId: clip.id,
@@ -245,7 +291,7 @@ export default function ClipperPage() {
           ])
         )
       );
-      setMessage(data.warning ?? `${data.clips.length} clips generated.`);
+      setMessage(data.warning ?? `${generatedClips.length} clips generated.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Generate failed.");
     } finally {
@@ -359,11 +405,23 @@ export default function ClipperPage() {
             <span className="mb-2 block text-sm font-medium text-slate-300">Upload Video</span>
             <input
               type="file"
-              accept="video/*"
+              accept={videoUploadPolicy.acceptedExtensions}
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
+                if (file) {
+                  const validation = validateVideoUpload(file);
+                  if (!validation.valid) {
+                    event.target.value = "";
+                    setUploadFile(null);
+                    setMessageTone("error");
+                    setMessage(validation.error);
+                    return;
+                  }
+                }
                 setUploadFile(file);
                 setUploadPreviewUrl(file ? URL.createObjectURL(file) : null);
+                setMessageTone("info");
+                setMessage(file ? `${file.name} siap diunggah.` : null);
               }}
               className="premium-input px-4 py-3"
             />
@@ -384,7 +442,8 @@ export default function ClipperPage() {
             Supabase Storage buckets needed for production: videos, thumbnails, outputs, subtitles. Current fallback stores upload locally and does not crash if buckets are missing.
           </div>
         ) : null}
-        {message ? <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">{message}</div> : null}
+        {uploading ? <div className="mt-4 rounded-2xl border border-sky-300/20 bg-sky-300/10 p-4"><div className="flex justify-between text-sm text-sky-100"><span>Uploading video</span><span>{uploadProgress}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full bg-sky-300 transition-all" style={{ width: `${uploadProgress}%` }} /></div></div> : null}
+        {message ? <div className={clsx("mt-4 rounded-2xl border px-4 py-3 text-sm", messageTone === "error" ? "border-rose-300/25 bg-rose-300/10 text-rose-100" : messageTone === "success" ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100" : "border-white/10 bg-white/[0.04] text-slate-200")}>{message}</div> : null}
       </section>
 
       {(mediaJob || uploadPreviewUrl) ? (
@@ -415,6 +474,16 @@ export default function ClipperPage() {
                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
                 Start Processing
               </button>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <select value={analysisMode} onChange={(event) => setAnalysisMode(event.target.value as "DUMMY" | "REAL")} className="premium-input px-4 py-3 text-sm">
+                  <option value="DUMMY">AI Analysis: Dummy explicit</option>
+                  <option value="REAL">AI Analysis: Gemini REAL strict</option>
+                </select>
+                <button type="button" disabled={analyzing || !preview} onClick={analyzeUploadedVideo} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                  {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Analyze Video
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -847,4 +916,34 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-slate-400">{label}</div>
     </div>
   );
+}
+
+function uploadWithProgress(formData: FormData, onProgress: (progress: number) => void) {
+  return new Promise<{ videoSource: VideoPreview; job: MediaJob; warning?: string }>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/media/upload");
+    request.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    });
+    request.addEventListener("load", () => {
+      const data = safeJson(request.responseText);
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(data.error ?? data.message ?? "Upload failed."));
+        return;
+      }
+      onProgress(100);
+      resolve(data as { videoSource: VideoPreview; job: MediaJob; warning?: string });
+    });
+    request.addEventListener("error", () => reject(new Error("Upload network error. Periksa koneksi lalu coba lagi.")));
+    request.addEventListener("abort", () => reject(new Error("Upload dibatalkan.")));
+    request.send(formData);
+  });
+}
+
+function safeJson(value: string): Record<string, any> {
+  try {
+    return JSON.parse(value) as Record<string, any>;
+  } catch {
+    return {};
+  }
 }

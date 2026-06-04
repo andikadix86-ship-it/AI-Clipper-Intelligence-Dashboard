@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { apiFallback } from "@/lib/api-response";
 import { getNotifications } from "@/lib/notification-service";
 import { prisma } from "@/lib/prisma";
 import { withTimeout } from "@/lib/db-timeout";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -19,13 +21,17 @@ function fallbackNotifications() {
   };
 }
 
+function notificationFallbackResponse() {
+  return apiFallback(fallbackMessage, "NOTIFICATION_UNAVAILABLE", fallbackNotifications(), "notifications");
+}
+
 export async function GET() {
   try {
     const notifications = await withTimeout(getNotifications());
     return NextResponse.json({ ...notifications, notifications: notifications.items, source: "database" });
   } catch (error) {
-    console.error("[notifications] Database unavailable while loading notifications.", error);
-    return NextResponse.json(fallbackNotifications());
+    serverLogger.warn("notifications.list.fallback", undefined, error);
+    return notificationFallbackResponse();
   }
 }
 
@@ -42,7 +48,7 @@ export async function PATCH(request: Request) {
     const notifications = await withTimeout(getNotifications());
     return NextResponse.json({ ...notifications, notifications: notifications.items, source: "database" });
   } catch (error) {
-    console.error("[notifications] Database unavailable while updating notifications.", error);
-    return NextResponse.json(fallbackNotifications());
+    serverLogger.warn("notifications.update.fallback", undefined, error);
+    return notificationFallbackResponse();
   }
 }

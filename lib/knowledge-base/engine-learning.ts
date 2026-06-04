@@ -1,0 +1,10 @@
+import type { AffiliatePlan } from "@/lib/affiliate/affiliate-engine";
+import type { ClipPlan } from "@/lib/clipper/clipper-engine";
+import type { ContentPackage } from "@/lib/content-creator/content-creator-engine";
+import type { PublishingPackage } from "@/lib/publishing/publishing-engine";
+import { saveKnowledge } from "@/lib/knowledge-base/repository";
+
+export function saveCreatorPattern(input: { platform: string; niche: string; data: ContentPackage }) { return saveKnowledge({ category: "creator-patterns", platform: input.platform, niche: input.niche, title: input.data.platform_metadata.title, content: input.data.hook_options.join(" | "), tags: input.data.hashtags, confidence_score: input.data.policy_check.risk_level === "low" ? 82 : 65, source_type: "engine" }); }
+export function saveClipperPattern(input: { platform: string; niche?: string; data: ClipPlan }) { const best = input.data.best_segments[0]; return saveKnowledge({ category: "hook-library", platform: input.platform, niche: input.niche || "general", title: best?.clip_title || "Clipper hook pattern", content: best?.reason || input.data.source_summary, tags: best?.suggested_hashtags || [], confidence_score: best?.hook_score || 70, source_type: "engine" }); }
+export function saveAffiliatePattern(input: { platform: string; category: string; data: AffiliatePlan }) { return saveKnowledge({ category: "affiliate-patterns", platform: input.platform, niche: input.category, title: input.data.product_research.product_name, content: input.data.content_strategy.recommended_angle, tags: [input.category, input.data.product_score.recommendation], confidence_score: input.data.product_score.overall_score, source_type: "engine" }); }
+export function savePublishingPolicy(input: { platform: string; data: PublishingPackage }) { return saveKnowledge({ category: "policy-rules", platform: input.platform, niche: "general", title: `${input.platform} publishing checklist`, content: input.data.policy_check.notes.join(" | "), tags: ["publishing", "policy", input.data.policy_check.risk_level], confidence_score: input.data.policy_check.risk_level === "low" ? 88 : 65, source_type: "engine" }); }

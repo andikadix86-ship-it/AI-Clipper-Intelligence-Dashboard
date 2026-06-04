@@ -4,6 +4,8 @@ import { demoPlaceholder } from "@/lib/demo-placeholder";
 import { analyzeVideoSource, fallbackClips, generateClipSuggestions, mapClipToDto, processClipJob } from "@/lib/media/processor";
 import { prisma } from "@/lib/prisma";
 import type { ClipSettingPayload, Platform, SocialPlatform } from "@/lib/types";
+import { buildCoreIntelligence } from "@/lib/intelligence/core-engine";
+import { ingestKnowledge } from "@/lib/intelligence/knowledge-base";
 
 export const runtime = "nodejs";
 
@@ -33,6 +35,8 @@ export async function POST(request: Request) {
   const clipCount = Math.max(1, Math.min(10, Number(body.setting.clipCount) || 3));
   const requestedDuration = body.setting.duration === "AUTO" ? 0 : Number(body.setting.duration) || 45;
   const fallback = fallbackClips(clipCount, requestedDuration || 30, body.sourceTitle || "Untitled source");
+  const intelligence = buildCoreIntelligence({ topic: body.sourceTitle || "Untitled source", niche: body.setting.category, platform: platformToSocialPlatform[body.platform] });
+  const knowledgeBase = await ingestKnowledge(intelligence, "CLIPPER_CENTER");
 
   try {
     let videoSourceId = body.videoSourceId;
@@ -155,14 +159,19 @@ export async function POST(request: Request) {
       analysis,
       jobs,
       clips: processedClips.map(mapClipToDto),
-      warning: analysis.warning
+      warning: analysis.warning,
+      intelligence,
+      knowledgeBase
     });
   } catch (error) {
     return NextResponse.json({
       videoSourceId: body.videoSourceId,
       settingId: `setting_${Date.now()}`,
       clips: fallback,
-      warning: error instanceof Error ? `Processor fallback used: ${error.message}` : "Processor fallback used."
+      warning: error instanceof Error ? `Processor fallback used: ${error.message}` : "Processor fallback used.",
+      source: "fallback",
+      intelligence,
+      knowledgeBase
     });
   }
 }

@@ -1,6 +1,7 @@
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { writeAuditLog } from "@/lib/audit-log";
 import { getGoogleOAuthSetting, saveGoogleOAuthSetting } from "@/lib/google-oauth-service";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,7 @@ export async function GET() {
     const setting = await getGoogleOAuthSetting();
     return apiSuccess("Google OAuth settings loaded.", { setting }, { setting });
   } catch (error) {
-    console.error("[settings] Database unavailable while loading Google OAuth settings.", error);
+    serverLogger.warn("settings.google_oauth.database_fallback", undefined, error);
     const setting = {
       clientIdMasked: process.env.GOOGLE_CLIENT_ID ? "env_***set" : "",
       clientSecretMasked: process.env.GOOGLE_CLIENT_SECRET ? "env_***set" : "",

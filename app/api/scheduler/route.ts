@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mapSchedule } from "@/lib/scheduler-service";
 import { prisma } from "@/lib/prisma";
+import { serverLogger } from "@/lib/server-logger";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ export async function GET() {
 
     return NextResponse.json({ schedules: schedules.map((schedule) => mapSchedule(schedule)) });
   } catch (error) {
-    console.error("[scheduler] Database unavailable while loading schedules.", error);
+    serverLogger.warn("scheduler.list.database_fallback", undefined, error);
     return NextResponse.json({ schedules: [], source: "fallback", message: "Database unavailable, using empty schedule list." });
   }
 }

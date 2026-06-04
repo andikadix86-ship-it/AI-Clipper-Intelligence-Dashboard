@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { BarChart3, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Edit3, List, Plus, Send, Trash2, XCircle } from "lucide-react";
+import { BarChart3, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Edit3, List, Loader2, Plus, Send, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { LibraryItemDto, ProjectDto, SocialPlatform } from "@/lib/types";
+import { ErrorCard } from "@/components/state-cards";
 
 type ScheduleStatus = "DRAFT" | "SCHEDULED" | "READY_TO_POST" | "PUBLISHING" | "POSTED" | "FAILED" | "CANCELED";
 type PublishMode = "MANUAL" | "SEMI_AUTO" | "AUTO";
@@ -54,14 +55,6 @@ const statusLabels: Record<ScheduleStatus, string> = {
   CANCELED: "Canceled"
 };
 
-const fallbackContentItems: ContentOption[] = [
-  { id: "clip_ai_workflow", title: "The 30 Second AI Workflow That Saves 2 Hours", typeLabel: "Clip", status: "Approved" }
-];
-
-const fallbackSocialAccounts: SocialAccountOption[] = [
-  { id: "acct_fatih_yt", name: "Fatih Shorts", platform: "YOUTUBE_SHORTS" }
-];
-
 function todayJakarta() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -100,13 +93,16 @@ export default function SchedulerPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState(new Date());
   const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [contentItems, setContentItems] = useState<ContentOption[]>(fallbackContentItems);
-  const [socialAccounts, setSocialAccounts] = useState<SocialAccountOption[]>(fallbackSocialAccounts);
+  const [contentItems, setContentItems] = useState<ContentOption[]>([]);
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccountOption[]>([]);
   const [schedules, setSchedules] = useState<SchedulerItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modal, setModal] = useState<{ type: "posted" | "performance"; schedule: SchedulerItem } | null>(null);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     projectId: "All",
     socialAccountId: "All",
@@ -117,9 +113,9 @@ export default function SchedulerPage() {
   });
   const [form, setForm] = useState({
     projectId: "",
-    contentItemId: fallbackContentItems[0].id,
-    socialAccountId: fallbackSocialAccounts[0].id,
-    platform: fallbackSocialAccounts[0].platform,
+    contentItemId: "",
+    socialAccountId: "",
+    platform: "YOUTUBE_SHORTS" as SocialPlatform,
     date: todayJakarta(),
     time: "09:00",
     timezone: "Asia/Jakarta",
@@ -148,6 +144,8 @@ export default function SchedulerPage() {
   }, []);
 
   async function loadInitialData() {
+    setLoading(true);
+    setLoadError(null);
     try {
       const [projectData, libraryData, accountData, scheduleData] = await Promise.all([
         fetch("/api/projects").then((response) => response.json()),
@@ -156,7 +154,7 @@ export default function SchedulerPage() {
         fetch("/api/scheduler").then((response) => response.json())
       ]);
 
-      const approvedContent = (libraryData.items ?? [])
+      const approvedContent = (Array.isArray(libraryData.items) ? libraryData.items : [])
         .filter((item: LibraryItemDto) => item.workflowStatus === "APPROVED")
         .map((item: LibraryItemDto) => ({
           id: item.id,
@@ -165,7 +163,7 @@ export default function SchedulerPage() {
           status: item.workflowStatusLabel,
           projectId: item.projectId
         }));
-      const accounts = (accountData.accounts ?? [])
+      const accounts = (Array.isArray(accountData.accounts) ? accountData.accounts : [])
         .filter((account: SocialAccountOption) => account.isActive !== false && account.status !== "DISABLED" && account.status !== "NOT_CONNECTED")
         .map((account: SocialAccountOption) => ({
           id: account.id,
@@ -174,19 +172,24 @@ export default function SchedulerPage() {
           projectId: account.projectId
         }));
 
-      setProjects(projectData.projects ?? []);
+      setProjects(Array.isArray(projectData.projects) ? projectData.projects : []);
       setContentItems(approvedContent);
-      setSocialAccounts(accounts.length ? accounts : fallbackSocialAccounts);
-      setSchedules(scheduleData.schedules ?? []);
+      setSocialAccounts(accounts);
+      setSchedules(Array.isArray(scheduleData.schedules) ? scheduleData.schedules : []);
+      if ([libraryData, accountData, scheduleData].some((data) => data.source === "fallback")) {
+        setLoadError("Scheduler memakai empty fallback karena Supabase belum tersedia. Buat schedule setelah Content Library dan Social Accounts tersambung.");
+      }
       setForm((current) => ({
         ...current,
         projectId: projectData.projects?.[0]?.id ?? "",
         contentItemId: approvedContent[0]?.id ?? "",
-        socialAccountId: accounts[0]?.id ?? fallbackSocialAccounts[0].id,
-        platform: accounts[0]?.platform ?? fallbackSocialAccounts[0].platform
+        socialAccountId: accounts[0]?.id ?? "",
+        platform: accounts[0]?.platform ?? "YOUTUBE_SHORTS"
       }));
     } catch (error) {
-      setToast({ type: "error", message: error instanceof Error ? error.message : "Scheduler data gagal dimuat." });
+      setLoadError(error instanceof Error ? error.message : "Scheduler data gagal dimuat.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -220,7 +223,8 @@ export default function SchedulerPage() {
   }
 
   function updateAccount(accountId: string) {
-    const account = socialAccounts.find((item) => item.id === accountId) ?? socialAccounts[0];
+    const account = socialAccounts.find((item) => item.id === accountId);
+    if (!account) return;
     setForm({ ...form, socialAccountId: account.id, platform: account.platform, projectId: account.projectId ?? form.projectId });
   }
 
@@ -265,6 +269,11 @@ export default function SchedulerPage() {
       return;
     }
 
+    if (!form.socialAccountId) {
+      setToast({ type: "error", message: "Tambahkan Social Account aktif sebelum membuat schedule." });
+      return;
+    }
+    setSaving(true);
     try {
       const response = await fetch(editingId ? `/api/scheduler/${editingId}` : "/api/scheduler/create", {
         method: editingId ? "PATCH" : "POST",
@@ -281,6 +290,8 @@ export default function SchedulerPage() {
       resetForm();
     } catch (error) {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Schedule gagal disimpan." });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -428,6 +439,8 @@ export default function SchedulerPage() {
           ))}
         </div>
       </header>
+      {loadError ? <ErrorCard title="Scheduler fallback aktif" description={loadError} action={{ label: "Open Social Accounts", href: "/social-accounts" }} /> : null}
+      {loading ? <div className="glass rounded-2xl p-5 text-sm text-slate-300">Memuat scheduler...</div> : null}
 
       <section className="glass rounded-2xl p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -467,6 +480,7 @@ export default function SchedulerPage() {
               <select value={form.socialAccountId} onChange={(e) => updateAccount(e.target.value)} className="premium-input px-4 py-3">
                 {socialAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
+              {!socialAccounts.length ? <p className="mt-2 rounded-xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100">Belum ada Social Account aktif. <Link href="/social-accounts" className="font-semibold text-white underline underline-offset-2">Tambahkan account</Link>.</p> : null}
             </Field>
             <Field label="Pilih Platform">
               <select value={form.platform} onChange={(e) => setForm({ ...form, platform: e.target.value as SocialPlatform })} className="premium-input px-4 py-3">
@@ -499,9 +513,9 @@ export default function SchedulerPage() {
             <Field label="Notes">
               <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} className="premium-input px-4 py-3" />
             </Field>
-            <button type="button" onClick={saveSchedule} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-4 font-semibold text-slate-950 shadow-glow">
-              <Plus className="h-5 w-5" />
-              {editingId ? "Update Schedule" : "Create Schedule"}
+            <button type="button" onClick={saveSchedule} disabled={saving || !contentItems.length || !socialAccounts.length} className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-4 font-semibold text-slate-950 shadow-glow disabled:cursor-not-allowed disabled:opacity-50">
+              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+              {saving ? "Saving..." : editingId ? "Update Schedule" : "Create Schedule"}
             </button>
           </div>
         </div>
