@@ -53,14 +53,17 @@ function campaignData(body: Record<string, unknown>) {
     source: String(body.source),
     sourceUrl: optional(body.sourceUrl),
     notes: String(body.notes ?? ""),
-    isDemo: body.isDemo !== false,
+    isDemo: body.dataMode === "DEMO DATA" || body.isDemo === true,
     status: String(body.status ?? "draft"),
     metadata: {
       ...metadata,
       targetAudience: String(body.targetAudience ?? metadata?.targetAudience ?? ""),
       contentObjective: String(body.contentObjective ?? metadata?.contentObjective ?? ""),
       targetPlatforms: strings(body.targetPlatforms),
-      budget: String(body.budget ?? metadata?.budget ?? "")
+      budget: String(body.budget ?? metadata?.budget ?? ""),
+      productId: optional(body.productId),
+      dataMode: String(body.dataMode ?? metadata?.dataMode ?? (body.isDemo === true ? "DEMO DATA" : "REAL DATA")),
+      missingProductFields: strings(body.missingProductFields)
     }
   };
 }

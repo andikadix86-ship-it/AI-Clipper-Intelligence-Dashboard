@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   let body: {
     affiliateProgramUrl?: string;
     mode?: "manual" | "sync";
+    csv?: string;
     programName?: string;
     websiteUrl?: string;
     dashboardUrl?: string;
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
     commission?: string;
     commissionInfo?: string;
     price?: string;
+    salesVolume?: string;
+    trendScore?: string;
+    opportunityScore?: string;
     productName?: string;
     category?: string;
     source?: string;
@@ -51,6 +55,11 @@ export async function POST(request: Request) {
       const products = await listProductIntelligence({ source: body.source, category: body.category, take: 10 });
       return NextResponse.json({ success: true, data: { sync, products }, sync, products, meta: { message: sync.message } });
     }
+    if (body.csv?.trim()) {
+      const rows = parseCsvProducts(body.csv).map((row) => createManualAffiliateProduct(row));
+      const products = await Promise.all(rows);
+      return NextResponse.json({ success: true, data: { products }, products, meta: { source: "manual_csv", data_mode: "MANUAL REAL DATA" } }, { status: 201 });
+    }
     const product = body.mode === "manual"
       ? await createManualAffiliateProduct({
         programName: body.programName ?? "",
@@ -59,6 +68,9 @@ export async function POST(request: Request) {
         affiliateLink: body.affiliateLink ?? "",
         commission: body.commission ?? body.commissionInfo ?? "",
         price: body.price ?? "",
+        salesVolume: body.salesVolume,
+        trendScore: body.trendScore,
+        opportunityScore: body.opportunityScore,
         productName: body.productName ?? "",
         category: body.category ?? "",
         notes: body.notes
@@ -84,4 +96,40 @@ function number(value: string | null) {
 function requiredUrl(value?: string) {
   if (!value?.trim()) throw new ProductIntelligenceValidationError("Affiliate program URL wajib diisi.");
   return value.trim();
+}
+
+function parseCsvProducts(csv: string) {
+  const [headerLine, ...lines] = csv.trim().split(/\r?\n/).filter(Boolean);
+  const headers = splitCsv(headerLine).map((item) => item.trim().toLowerCase());
+  return lines.map((line) => {
+    const values = splitCsv(line);
+    const row = Object.fromEntries(headers.map((header, index) => [header, values[index]?.trim() ?? ""]));
+    return {
+      programName: row.program_name || row.program || "Manual CSV Import",
+      websiteUrl: row.website_url || row.website || row.product_url || row.affiliate_link,
+      dashboardUrl: row.dashboard_url || row.website_url || row.website || row.affiliate_link,
+      affiliateLink: row.affiliate_link || row.source_url || row.product_url || row.website_url,
+      productName: row.product_name,
+      category: row.category,
+      commission: row.commission,
+      price: row.price,
+      salesVolume: row.sales_volume,
+      trendScore: row.trend_score,
+      opportunityScore: row.opportunity_score,
+      notes: row.notes || `Manual CSV real product data from ${row.source || "CSV import"}.`
+    };
+  });
+}
+
+function splitCsv(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (const char of line) {
+    if (char === "\"") quoted = !quoted;
+    else if (char === "," && !quoted) { values.push(current); current = ""; }
+    else current += char;
+  }
+  values.push(current);
+  return values;
 }

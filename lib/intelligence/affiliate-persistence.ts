@@ -111,7 +111,7 @@ export async function loadContentKit(campaignId: string) {
 export async function persistContentKit(campaign: AffiliateCampaignDraft, kit: AffiliateContentKit) {
   saveGeneratedContent(kit);
   try {
-    const response = await fetch("/api/affiliate/generated-content", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaignId: campaign.id, platform: campaign.platform, tone: kit.tone, source: campaign.source, isDemo: campaign.isDemo, metadata: kitMeta(kit), items: kitItems(kit) }) });
+    const response = await fetch("/api/affiliate/generated-content", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ campaignId: campaign.id, platform: campaign.platform, tone: kit.tone, source: campaign.source, isDemo: campaign.isDemo, metadata: kitMeta(kit, campaign), items: kitItems(kit) }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message);
     return { source: "database" as const, message: "Generated content tersimpan ke database." };
@@ -129,6 +129,9 @@ function mapCampaign(row: AffiliateCampaignDraft & { metadata?: Record<string, u
     budget: row.budget ?? String(row.metadata?.budget ?? ""),
     affiliateAccounts: row.campaignAccounts?.map((item) => item.affiliateAccount) ?? row.affiliateAccounts ?? [],
     affiliateAccountIds: row.campaignAccounts?.map((item) => item.affiliateAccount.id) ?? row.affiliateAccountIds ?? [],
+    productId: row.productId ?? String(row.metadata?.productId ?? ""),
+    dataMode: dataMode(row.metadata?.dataMode),
+    missingProductFields: stringList(row.metadata?.missingProductFields),
     status: campaignStatus(row.status),
     createdAt: String(row.createdAt),
     dataSource: "database" as const
@@ -137,10 +140,11 @@ function mapCampaign(row: AffiliateCampaignDraft & { metadata?: Record<string, u
 function stringList(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 function campaignStatus(value: string): AffiliateCampaignDraft["status"] { return value === "testing" || value === "active" || value === "winner" || value === "paused" ? value : "draft"; }
 function mapOpportunity(row: SavedOpportunity & { title?: string }) { return { ...row, topic: row.topic ?? row.title ?? "", status: "saved" as const, createdAt: String(row.createdAt), dataSource: "database" as const }; }
-function kitMeta(kit: AffiliateContentKit) { return { targetAudience: kit.targetAudience, mainBenefit: kit.mainBenefit, problem: kit.problem, contentAngle: kit.contentAngle, updatedAt: kit.updatedAt }; }
+function kitMeta(kit: AffiliateContentKit, campaign: AffiliateCampaignDraft) { return { targetAudience: kit.targetAudience, mainBenefit: kit.mainBenefit, problem: kit.problem, contentAngle: kit.contentAngle, updatedAt: kit.updatedAt, productId: campaign.productId, dataMode: campaign.dataMode, missingProductFields: campaign.missingProductFields }; }
 function kitItems(kit: AffiliateContentKit) { return (Object.entries({ hook: kit.hooks, script: kit.scripts, caption: kit.captions, hashtag: kit.hashtags, cta: kit.ctas, voice_over: kit.voiceOverScripts, scene_plan: kit.scenePlans, video_prompt: kit.videoPrompts }) as Array<[string, string[]]>).flatMap(([contentType, values]) => values.map((body, index) => ({ contentType, title: `${contentType.replace("_", " ")} ${index + 1}`, body, metadata: { index } }))); }
 function rowsToKit(campaignId: string, rows: DbGeneratedContent[]): AffiliateContentKit {
   const meta = rows[0]?.metadata ?? {};
   const group = (type: string) => rows.filter((row) => row.contentType === type).map((row) => row.body);
-  return { campaignId, targetAudience: String(meta.targetAudience ?? ""), mainBenefit: String(meta.mainBenefit ?? ""), problem: String(meta.problem ?? ""), tone: String(rows[0]?.tone ?? "Helpful and direct"), contentAngle: String(meta.contentAngle ?? ""), hooks: group("hook"), scripts: group("script"), captions: group("caption"), hashtags: group("hashtag"), ctas: group("cta"), voiceOverScripts: group("voice_over"), scenePlans: group("scene_plan"), videoPrompts: group("video_prompt"), updatedAt: String(meta.updatedAt ?? new Date().toISOString()) };
+  return { campaignId, productId: String(meta.productId ?? ""), dataMode: dataMode(meta.dataMode), targetAudience: String(meta.targetAudience ?? ""), mainBenefit: String(meta.mainBenefit ?? ""), problem: String(meta.problem ?? ""), tone: String(rows[0]?.tone ?? "Helpful and direct"), contentAngle: String(meta.contentAngle ?? ""), hooks: group("hook"), scripts: group("script"), captions: group("caption"), hashtags: group("hashtag"), ctas: group("cta"), voiceOverScripts: group("voice_over"), scenePlans: group("scene_plan"), videoPrompts: group("video_prompt"), updatedAt: String(meta.updatedAt ?? new Date().toISOString()) };
 }
+function dataMode(value: unknown): AffiliateCampaignDraft["dataMode"] | undefined { return value === "DEMO DATA" || value === "REAL DATA" || value === "MANUAL REAL DATA" ? value : undefined; }

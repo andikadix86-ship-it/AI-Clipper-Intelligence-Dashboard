@@ -18,6 +18,8 @@ type ProductSeed = {
   category: AffiliateCategory;
   commissionRate: number;
   price: number;
+  trendScore?: number;
+  opportunityScore?: number;
   priceRange?: string;
   productUrl?: string;
   affiliateUrl?: string;
@@ -37,6 +39,9 @@ export type ManualAffiliateProductInput = {
   category: string;
   commission: string;
   price: string;
+  salesVolume?: string;
+  trendScore?: string;
+  opportunityScore?: string;
   notes?: string;
 };
 
@@ -68,8 +73,8 @@ export const sourceConfig: Record<AffiliateSource, { mode: ProductSourceMode; co
 
 export class ProductIntelligenceEngine {
   async getProducts(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number; sync?: boolean } = {}) {
-    const source = asAffiliateSource(input.source ?? "TikTok Shop");
-    if (input.sync) await this.syncSource(source, input.category);
+    const source = input.source ? asAffiliateSource(input.source) : undefined;
+    if (input.sync && source) await this.syncSource(source, input.category);
 
     if (source === "Custom Affiliate") {
       const custom = await this.readCache({ ...input, source, sourceType: "REAL_USER_INPUT" });
@@ -79,8 +84,10 @@ export class ProductIntelligenceEngine {
     const cache = await this.readCache({ ...input, source });
     if (cache.length) return cache.map((product) => this.markSourceType(product));
 
+    if (!source) return [];
     const adapter = adapterForSource(source);
     const result = await adapter.getProducts(input.category);
+    if (!result.configured && !input.sync) return [];
     const saved = await Promise.all(result.products.map((product) => this.saveToCache(product)));
     return saved.map((product) => this.markSourceType(product));
   }
@@ -89,14 +96,15 @@ export class ProductIntelligenceEngine {
     return adapterForSource(asAffiliateSource(source ?? "TikTok Shop")).getCategories();
   }
 
-  scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue">): ProductOpportunityScore {
+  scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue" | "trendScore" | "opportunityScore">): ProductOpportunityScore | null {
+    if (missingProductFields(product).length) return null;
     const hash = createHash("sha256").update(`${product.productName}|${product.platform}|${product.category}`).digest();
-    const demand = bounded(product.salesVolume ? Math.min(100, 35 + product.salesVolume / 18) : 58 + hash[0] % 39);
-    const trend = bounded(product.revenue ? Math.min(100, 48 + product.revenue / 1_000_000) : 55 + hash[3] % 43);
+    const demand = bounded(Math.min(100, 35 + (product.salesVolume ?? 0) / 18));
+    const trend = bounded(product.trendScore ?? (product.revenue ? Math.min(100, 48 + product.revenue / 1_000_000) : 55 + hash[3] % 43));
     const commission = bounded(product.commissionRate * 5);
     const contentPotential = bounded(62 + hash[2] % 35);
     const competition = bounded(35 + hash[1] % 56);
-    const opportunity = bounded(Math.round((demand * 0.25) + (trend * 0.20) + (commission * 0.20) + (contentPotential * 0.25) + ((100 - competition) * 0.10)));
+    const opportunity = bounded(product.opportunityScore ?? Math.round((demand * 0.25) + (trend * 0.20) + (commission * 0.20) + (contentPotential * 0.25) + ((100 - competition) * 0.10)));
     return { demand, competition, commission, contentPotential, trend, opportunity };
   }
 
@@ -112,7 +120,7 @@ export class ProductIntelligenceEngine {
 
   markSourceType(product: AffiliateProductInsightDto): AffiliateProductInsightDto {
     const sourceType = product.sourceType ?? (product.isDemo ? "DEMO" : "CACHE");
-    return { ...product, sourceType, isEstimated: product.isEstimated ?? true };
+    return { ...product, sourceType, dataMode: dataMode(sourceType), missingFields: product.missingFields ?? requiredMissing(product), isEstimated: product.isEstimated ?? false };
   }
 
   async syncSource(source: AffiliateSource, category?: string) {
@@ -187,7 +195,10 @@ export async function createManualAffiliateProduct(input: ManualAffiliateProduct
     platform: "Custom Affiliate",
     category: asCategory(input.category),
     commissionRate,
-    price,
+        price,
+        salesVolume: parseIntNumber(input.salesVolume),
+        trendScore: parseIntNumber(input.trendScore),
+        opportunityScore: parseIntNumber(input.opportunityScore),
     priceRange: rupiahRange(price),
     productUrl: website.toString(),
     affiliateUrl: affiliate.toString(),
@@ -280,7 +291,8 @@ function categoryProducts(category: string) {
   return ["Best Seller Bundle", "Daily Use Product", "Creator Demo Kit", "Value Pack Starter", "Premium Trial Offer", "Compact Utility Set", "Problem Solver Pack", "Seasonal Promo Product", "Starter Bundle", "Pro Upgrade Offer"];
 }
 
-function insightData(seed: ProductSeed, score: ProductOpportunityScore) {
+function insightData(seed: ProductSeed, score: ProductOpportunityScore | null) {
+  const missingFields = missingProductFields(seed);
   return {
     productName: seed.productName,
     platform: seed.platform,
@@ -292,31 +304,31 @@ function insightData(seed: ProductSeed, score: ProductOpportunityScore) {
     commissionRate: seed.commissionRate,
     revenue: seed.revenue,
     salesVolume: seed.salesVolume,
-    demandScore: score.demand,
-    trendScore: score.trend,
-    competitionLevel: score.competition >= 70 ? "High" : score.competition >= 45 ? "Medium" : "Low",
-    competitionScore: score.competition,
+    demandScore: score?.demand,
+    trendScore: score?.trend ?? seed.trendScore ?? 0,
+    competitionLevel: score ? score.competition >= 70 ? "High" : score.competition >= 45 ? "Medium" : "Low" : "Medium",
+    competitionScore: score?.competition,
     commissionEstimate: `${seed.commissionRate}%`,
-    commissionScore: score.commission,
+    commissionScore: score?.commission,
     priceRange: seed.priceRange ?? rupiahRange(seed.price),
-    contentPotentialScore: score.contentPotential,
-    opportunityScore: score.opportunity,
-    isEstimated: true,
+    contentPotentialScore: score?.contentPotential ?? 0,
+    opportunityScore: score?.opportunity,
+    isEstimated: false,
     lastSyncedAt: new Date(),
     source: seed.platform,
     sourceUrl: seed.affiliateUrl ?? seed.productUrl,
-    confidence: seed.sourceType === "REAL_USER_INPUT" ? 82 : seed.sourceType === "REAL" ? 88 : 68,
+    confidence: seed.sourceType === "REAL_USER_INPUT" ? 82 : seed.sourceType === "REAL" ? 88 : 35,
     collectedAt: new Date(),
     isDemo: seed.sourceType === "DEMO",
     notes: seed.notes ?? "Imported affiliate program candidate. Review offer details before campaign activation.",
-    rawData: { scoreBreakdown: score, sourceType: seed.sourceType, isEstimated: true, ...seed.rawData } as Prisma.InputJsonValue
+    rawData: { scoreBreakdown: score, sourceType: seed.sourceType, dataMode: dataMode(seed.sourceType), missingFields, isEstimated: false, ...seed.rawData } as Prisma.InputJsonValue
   };
 }
 
 function toDto(product: {
   id: string; productName: string; platform: string; category: string; sourceType?: string; productUrl?: string | null; affiliateUrl?: string | null; price?: number | null; commissionRate?: number | null; revenue?: number | null; salesVolume?: number | null; demandScore?: number | null; trendScore: number; competitionLevel: string; competitionScore?: number | null; commissionEstimate: string; commissionScore?: number | null; priceRange: string; contentPotentialScore: number; opportunityScore?: number | null; isEstimated?: boolean | null; lastSyncedAt?: Date | null; source: string; sourceUrl: string | null; confidence: number; collectedAt: Date; isDemo: boolean; notes: string; rawData: unknown;
 }): AffiliateProductInsightDto {
-  const rawData = product.rawData as { scoreBreakdown?: ProductOpportunityScore; sourceType?: ProductSourceType; isEstimated?: boolean } | null;
+  const rawData = product.rawData as { scoreBreakdown?: ProductOpportunityScore | null; sourceType?: ProductSourceType; isEstimated?: boolean; missingFields?: string[]; dataMode?: AffiliateProductInsightDto["dataMode"] } | null;
   const score = rawData?.scoreBreakdown ?? {
     demand: product.demandScore ?? product.trendScore,
     competition: product.competitionScore ?? competitionScore(product.competitionLevel),
@@ -326,6 +338,7 @@ function toDto(product: {
     opportunity: product.opportunityScore ?? Math.round((product.trendScore + product.contentPotentialScore) / 2)
   };
   const sourceType = asSourceType(product.sourceType ?? rawData?.sourceType ?? (product.isDemo ? "DEMO" : "CACHE"));
+  const missingFields = rawData?.missingFields ?? requiredMissing({ price: product.price ?? undefined, commissionRate: product.commissionRate ?? undefined, salesVolume: product.salesVolume ?? undefined, trendScore: product.trendScore, opportunityScore: product.opportunityScore ?? undefined });
   return {
     ...product,
     platform: asSource(product.platform),
@@ -340,9 +353,11 @@ function toDto(product: {
     collectedAt: product.collectedAt.toISOString(),
     lastSyncedAt: product.lastSyncedAt?.toISOString(),
     sourceType,
-    isEstimated: product.isEstimated ?? rawData?.isEstimated ?? true,
-    opportunityScore: score.opportunity,
-    scoreBreakdown: score
+    dataMode: rawData?.dataMode ?? dataMode(sourceType),
+    missingFields,
+    isEstimated: product.isEstimated ?? rawData?.isEstimated ?? false,
+    opportunityScore: missingFields.length ? undefined : score.opportunity,
+    scoreBreakdown: missingFields.length ? undefined : score
   };
 }
 
@@ -406,10 +421,31 @@ function commissionNumber(value: string | number | null | undefined) {
   const parsed = Number(String(value ?? "").match(/\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
   return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 10;
 }
+function parseIntNumber(value?: string) {
+  const parsed = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : undefined;
+}
 function priceNumber(value: string) {
   const parsed = Number(value.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", "."));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
+function dataMode(sourceType: ProductSourceType): AffiliateProductInsightDto["dataMode"] {
+  if (sourceType === "REAL_USER_INPUT") return "MANUAL REAL DATA";
+  if (sourceType === "REAL" || sourceType === "CACHE") return "REAL DATA";
+  return "DEMO DATA";
+}
+function missingProductFields(product: Pick<ProductSeed, "price" | "commissionRate" | "salesVolume" | "trendScore" | "opportunityScore">) {
+  return requiredMissing(product);
+}
+function requiredMissing(product: { price?: number | null; commissionRate?: number | null; salesVolume?: number | null; trendScore?: number | null; opportunityScore?: number | null }) {
+  const missing: string[] = [];
+  if (!product.price || product.price <= 0) missing.push("price");
+  if (!product.commissionRate || product.commissionRate <= 0) missing.push("commission");
+  if (!Number.isFinite(product.salesVolume ?? NaN) || (product.salesVolume ?? 0) <= 0) missing.push("sales_volume");
+  if (!Number.isFinite(product.trendScore ?? NaN) || (product.trendScore ?? 0) <= 0) missing.push("trend_score");
+  if (!Number.isFinite(product.opportunityScore ?? NaN) || (product.opportunityScore ?? 0) <= 0) missing.push("opportunity_score");
+  return missing;
+}
 function rupiahRange(value: number) { return value > 0 ? rupiah(value) : "Validate from custom program"; }
 function rupiah(value: number) { return `Rp${Math.round(value).toLocaleString("id-ID")}`; }
-function fallbackMessage(configured: boolean) { return configured ? "Product data synced." : "Real API belum dikonfigurasi, menampilkan demo/cache data."; }
+function fallbackMessage(configured: boolean) { return configured ? "Product data synced." : "Demo data active. Configure API or import real product data to test real workflow."; }

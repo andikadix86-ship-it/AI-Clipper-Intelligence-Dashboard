@@ -1,22 +1,12 @@
-import { BarChart3, CalendarClock, Calculator, ChartNoAxesCombined, Flame, Megaphone, PackageSearch, Search, Sparkles, Store, Target, TrendingUp, UsersRound } from "lucide-react";
+import { BarChart3, CalendarClock, Calculator, ChartNoAxesCombined, Megaphone, PackageSearch, Search, Sparkles, Store, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { ModuleGrid } from "@/components/centers/center-ui";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { PageHeader, StatCard } from "@/components/studio-ui";
 import { AffiliateEnginePanel } from "@/components/centers/affiliate-engine-panel";
+import { ProductOpportunityCards } from "@/components/affiliate/product-opportunity-cards";
 import { ProductIntelligenceCenter } from "@/components/affiliate/product-intelligence-center";
 import { AffiliateAccountsPanel, AffiliateAnalyticsPanel, AffiliateDownstreamPanel, AffiliateSchedulerPanel, CampaignManagerPanel } from "@/components/affiliate/affiliate-workflow-panels";
-
-const productCards = [
-  { title: "Trending Products", detail: "Products with accelerating demand signals.", metric: "128", icon: TrendingUp },
-  { title: "High Commission Products", detail: "Products prioritized by payout potential.", metric: "42", icon: BarChart3 },
-  { title: "Low Competition Products", detail: "Opportunities with healthier entry windows.", metric: "36", icon: Target },
-  { title: "Viral Products", detail: "Products appearing in fast-moving short-form content.", metric: "19", icon: Flame }
-];
-
-const recommendedProducts = [
-  { title: "Recommended Products", detail: "AI-curated shortlist for the next campaign.", metric: "24", icon: Sparkles }
-];
 
 const modules = [
   { title: "Product Hunter", detail: "Discover products with strong affiliate potential.", icon: PackageSearch, tag: "Discovery" },
@@ -41,8 +31,8 @@ export function AffiliateCenterWorkspace() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Affiliate Marketing OS" title="Affiliate Center" subtitle="Find profitable products, target multiple affiliate accounts, and run campaigns from intelligence to analytics." description="Supabase-backed product intelligence, multi-account campaign planning, content production, publishing, and affiliate analytics." action={{ label: "Explore Product Hunter", href: "/winning-products" }} />
-      <ModuleGrid title="Product Opportunity Cards" description="Start here: compare the best product opportunities before researching, campaigning, and publishing." items={productCards} />
-      <ModuleGrid title="Recommended Product Shortlist" description="AI-curated product picks for the next affiliate campaign." items={recommendedProducts} columns="xl:grid-cols-4" />
+      <ProductOpportunityCards />
+      <ProductOpportunityCards shortlistOnly />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Products Scanned" value="70+" detail="Supabase intelligence catalog" />
         <StatCard label="Sources" value="07" detail="Marketplace and custom affiliate" />

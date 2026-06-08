@@ -1,0 +1,3 @@
+product_name,platform,category,price,commission,sales_volume,trend_score,opportunity_score,source,affiliate_link,website_url,dashboard_url,notes
+Manual Real Ergonomic Laptop Stand,Custom Affiliate,Digital Products,189000,12,740,78,84,Manual real seed,https://example.com/affiliate/laptop-stand,https://example.com/products/laptop-stand,https://example.com/affiliate/dashboard,Manual real data seed with complete scoring fields.
+Manual Real Creator Mic Kit,Custom Affiliate,AI Tools,329000,15,520,82,86,Manual real seed,https://example.com/affiliate/creator-mic,https://example.com/products/creator-mic,https://example.com/affiliate/dashboard,Manual real data seed separate from demo data.

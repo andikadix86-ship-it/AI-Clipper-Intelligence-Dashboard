@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { AffiliateAccountDto, AffiliateCampaignDraft } from "@/lib/intelligence/action-flow";
 import { persistCampaign } from "@/lib/intelligence/affiliate-persistence";
 
-export type CampaignProductSeed = Partial<Pick<AffiliateCampaignDraft, "productName" | "platform" | "category" | "trendScore" | "competitionLevel" | "commissionEstimate" | "priceRange" | "contentPotentialScore" | "source" | "sourceUrl" | "notes" | "isDemo">>;
+export type CampaignProductSeed = Partial<Pick<AffiliateCampaignDraft, "productId" | "productName" | "platform" | "category" | "trendScore" | "competitionLevel" | "commissionEstimate" | "priceRange" | "contentPotentialScore" | "source" | "sourceUrl" | "notes" | "isDemo" | "dataMode" | "missingProductFields">>;
 
 type CampaignCreationModalProps = {
   open: boolean;
@@ -62,6 +62,10 @@ export function CampaignCreationModal({ open, seed, onClose, onSaved }: Campaign
       setError("Pilih minimal satu affiliate account sebelum menyimpan campaign.");
       return;
     }
+    if (seed?.missingProductFields?.length) {
+      setError(`Product data belum lengkap: ${seed.missingProductFields.join(", ")}. Lengkapi data real/manual sebelum membuat campaign.`);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -83,8 +87,11 @@ export function CampaignCreationModal({ open, seed, onClose, onSaved }: Campaign
         contentPotentialScore: seed?.contentPotentialScore ?? 0,
         source: seed?.source ?? "Affiliate Center",
         sourceUrl: seed?.sourceUrl,
+        productId: seed?.productId,
+        dataMode: seed?.dataMode,
+        missingProductFields: seed?.missingProductFields,
         notes: seed?.notes ?? "",
-        isDemo: seed?.isDemo ?? false
+        isDemo: seed?.dataMode === "DEMO DATA" || Boolean(seed?.isDemo)
       });
       if (result.source !== "database") {
         setError("Campaign belum tersimpan ke Supabase. Periksa koneksi database lalu coba lagi.");
@@ -114,6 +121,7 @@ export function CampaignCreationModal({ open, seed, onClose, onSaved }: Campaign
           <Field label="Campaign Name" value={form.campaignName} onChange={(campaignName) => setForm({ ...form, campaignName })} />
           <Field label="Product" value={form.productName} onChange={(productName) => setForm({ ...form, productName })} />
           <Field label="Product Source" value={seed?.source ?? "Affiliate Center"} onChange={() => {}} disabled />
+          <Field label="Data Mode" value={seed?.dataMode ?? (seed?.isDemo ? "DEMO DATA" : "REAL DATA")} onChange={() => {}} disabled />
           <Field label="Category" value={seed?.category ?? "Affiliate Product"} onChange={() => {}} disabled />
           <div className="md:col-span-2"><Field label="Audience" value={form.targetAudience} onChange={(targetAudience) => setForm({ ...form, targetAudience })} /></div>
           <div className="md:col-span-2"><Field label="Goal" value={form.contentObjective} onChange={(contentObjective) => setForm({ ...form, contentObjective })} /></div>

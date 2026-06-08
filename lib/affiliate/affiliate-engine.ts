@@ -3,6 +3,9 @@ import { requestStructuredText } from "../providers/structured-text";
 
 export type AffiliateInput = {
   campaignId?: string;
+  productId?: string;
+  dataMode?: "DEMO DATA" | "REAL DATA" | "MANUAL REAL DATA";
+  isDemo?: boolean;
   productName?: string;
   productCategory: string;
   platform: "tiktok" | "youtube" | "instagram" | "facebook" | "shopee";

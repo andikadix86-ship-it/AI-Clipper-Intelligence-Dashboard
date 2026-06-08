@@ -47,6 +47,9 @@ export type SavedOpportunity = {
 
 export type AffiliateCampaignDraft = {
   id: string;
+  productId?: string;
+  dataMode?: "DEMO DATA" | "REAL DATA" | "MANUAL REAL DATA";
+  missingProductFields?: string[];
   campaignName: string;
   productName: string;
   targetAudience?: string;
@@ -90,6 +93,8 @@ export type AffiliateCampaignInput = Omit<AffiliateCampaignDraft, "id" | "create
 
 export type AffiliateContentKit = {
   campaignId: string;
+  productId?: string;
+  dataMode?: AffiliateCampaignDraft["dataMode"];
   targetAudience: string;
   mainBenefit: string;
   problem: string;
@@ -263,6 +268,9 @@ export function productStudioContext(product: AffiliateProductInsightDto): Studi
 
 export function affiliateCampaignFromProduct(product: AffiliateProductInsightDto) {
   return createCampaignDraft({
+    productId: product.id,
+    dataMode: product.dataMode,
+    missingProductFields: product.missingFields,
     campaignName: `${product.productName} Campaign`,
     productName: product.productName,
     platform: product.platform,
@@ -303,6 +311,8 @@ export function generateContentKit(campaign: AffiliateCampaignDraft, previous?: 
   const ctas = platformCtas(campaign.targetPlatforms?.length ? campaign.targetPlatforms : [campaign.platform]);
   return {
     campaignId: campaign.id,
+    productId: campaign.productId,
+    dataMode: campaign.dataMode,
     targetAudience,
     mainBenefit,
     problem,

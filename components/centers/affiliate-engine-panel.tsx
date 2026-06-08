@@ -107,7 +107,7 @@ function AffiliateResult({ campaign, plan, meta }: { campaign: AffiliateCampaign
 }
 
 function campaignInput(campaign: AffiliateCampaignDraft): AffiliateInput {
-  return { campaignId: campaign.id, productName: campaign.productName, productCategory: campaign.category, platform: normalizePlatform(campaign.platform), targetAudience: campaign.targetAudience || `Audience produk ${campaign.category}`, priceRange: campaign.priceRange, commissionRate: campaign.commissionEstimate, contentObjective: campaign.contentObjective || "sales conversion", language: "Bahasa Indonesia", affiliateAccounts: campaign.affiliateAccounts?.map((account) => ({ platform: account.platform, handle: account.handle, role: account.role })) };
+  return { campaignId: campaign.id, productId: campaign.productId, dataMode: campaign.dataMode, isDemo: campaign.isDemo, productName: campaign.productName, productCategory: campaign.category, platform: normalizePlatform(campaign.platform), targetAudience: campaign.targetAudience || `Audience produk ${campaign.category}`, priceRange: campaign.priceRange, commissionRate: campaign.commissionEstimate, contentObjective: campaign.contentObjective || "sales conversion", language: "Bahasa Indonesia", affiliateAccounts: campaign.affiliateAccounts?.map((account) => ({ platform: account.platform, handle: account.handle, role: account.role })) };
 }
 
 function normalizePlatform(platform: string): AffiliateInput["platform"] {

@@ -32,6 +32,8 @@ export type AffiliateProductInsightDto = {
   platform: "TikTok Shop" | "Shopee" | "Tokopedia" | "Lazada" | "Facebook" | "Instagram" | "Custom Affiliate";
   category: string;
   sourceType?: "DEMO" | "CACHE" | "REAL" | "REAL_USER_INPUT";
+  dataMode?: "DEMO DATA" | "REAL DATA" | "MANUAL REAL DATA";
+  missingFields?: string[];
   productUrl?: string;
   affiliateUrl?: string;
   price?: number;

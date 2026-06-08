@@ -38,8 +38,8 @@ async function persistPlan(input: AffiliateInput & { campaignId?: string }, plan
       platform: input.platform,
       tone: "Strategy",
       source: "Affiliate Plan Engine",
-      isDemo: true,
-      metadata: { meta: JSON.parse(JSON.stringify(meta)) }
+      isDemo: input.dataMode === "DEMO DATA" || input.isDemo === true || (meta as { mode?: string }).mode !== "real",
+      metadata: { meta: JSON.parse(JSON.stringify(meta)), productId: input.productId, dataMode: input.dataMode }
     }
   }));
 }

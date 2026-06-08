@@ -7,7 +7,7 @@ import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
 import { affiliateSources, allCategoriesLabel, getCategoryOptionsForSource, sourceCategoryMap } from "@/lib/affiliate/product-intelligence-catalog";
 import { persistOpportunity } from "@/lib/intelligence/affiliate-persistence";
-import type { AffiliateProductInsightDto, ProductOpportunityScore } from "@/lib/intelligence/types";
+import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
 
 const dateFilters = [
   { label: "All Time", days: 0 },
@@ -29,7 +29,9 @@ export function ProductIntelligenceCenter() {
   const [sourceConfig, setSourceConfig] = useState<SourceConfig>({});
   const [affiliateUrl, setAffiliateUrl] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
-  const [manual, setManual] = useState({ programName: "", websiteUrl: "", dashboardUrl: "", affiliateLink: "", commission: "", price: "", productName: "", category: sourceCategoryMap["Custom Affiliate"][0], notes: "" });
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csv, setCsv] = useState("");
+  const [manual, setManual] = useState({ programName: "", websiteUrl: "", dashboardUrl: "", affiliateLink: "", commission: "", price: "", salesVolume: "", trendScore: "", opportunityScore: "", productName: "", category: sourceCategoryMap["Custom Affiliate"][0], notes: "" });
   const [campaignSeed, setCampaignSeed] = useState<CampaignProductSeed>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
@@ -130,13 +132,34 @@ export function ProductIntelligenceCenter() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error?.message ?? "Custom affiliate product gagal disimpan.");
       setNotice(`${payload.product.productName} ditambahkan ke Product Intelligence Center.`);
-      setManual({ programName: "", websiteUrl: "", dashboardUrl: "", affiliateLink: "", commission: "", price: "", productName: "", category: sourceCategoryMap["Custom Affiliate"][0], notes: "" });
+      setManual({ programName: "", websiteUrl: "", dashboardUrl: "", affiliateLink: "", commission: "", price: "", salesVolume: "", trendScore: "", opportunityScore: "", productName: "", category: sourceCategoryMap["Custom Affiliate"][0], notes: "" });
       setManualOpen(false);
       setSource("Custom Affiliate");
       setCategory(payload.product.category);
       await load();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Custom affiliate product gagal disimpan.");
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function importCsv() {
+    if (!csv.trim()) return setError("Paste CSV rows before importing.");
+    setSaving("csv");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/affiliate/product-intelligence", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv }) });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error?.message ?? "CSV import gagal.");
+      setNotice(`${payload.products?.length ?? 0} manual real product rows imported.`);
+      setCsv("");
+      setCsvOpen(false);
+      setSource("Custom Affiliate");
+      await load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "CSV import gagal.");
     } finally {
       setSaving("");
     }
@@ -161,6 +184,7 @@ export function ProductIntelligenceCenter() {
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={syncProductData} disabled={syncing} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-60">{syncing ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}Sync Product Data</button>
             <button type="button" onClick={() => setManualOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white"><Plus className="h-3.5 w-3.5" />Add Custom Affiliate Product</button>
+            <button type="button" onClick={() => setCsvOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-200"><Plus className="h-3.5 w-3.5" />Import CSV</button>
           </div>
         </div>
 
@@ -183,10 +207,18 @@ export function ProductIntelligenceCenter() {
           <Field label="Affiliate Link" value={manual.affiliateLink} onChange={(affiliateLink) => setManual({ ...manual, affiliateLink })} />
           <Field label="Commission" value={manual.commission} onChange={(commission) => setManual({ ...manual, commission })} />
           <Field label="Price" value={manual.price} onChange={(price) => setManual({ ...manual, price })} />
+          <Field label="Sales Volume" value={manual.salesVolume} onChange={(salesVolume) => setManual({ ...manual, salesVolume })} />
+          <Field label="Trend Score" value={manual.trendScore} onChange={(trendScore) => setManual({ ...manual, trendScore })} />
+          <Field label="Opportunity Score" value={manual.opportunityScore} onChange={(opportunityScore) => setManual({ ...manual, opportunityScore })} />
           <Field label="Product / Service Name" value={manual.productName} onChange={(productName) => setManual({ ...manual, productName })} />
           <label><Label>Category</Label><select value={manual.category} onChange={(event) => setManual({ ...manual, category: event.target.value })} className="premium-input mt-1.5 px-3 py-2.5 text-sm">{sourceCategoryMap["Custom Affiliate"].map((item) => <option key={item}>{item}</option>)}</select></label>
           <Field label="Notes" value={manual.notes} onChange={(notes) => setManual({ ...manual, notes })} />
           <button type="button" onClick={addManualProduct} disabled={saving === "manual"} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{saving === "manual" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Save Custom Product</button>
+        </div> : null}
+        {csvOpen ? <div className="mt-5 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.035] p-4">
+          <Label>CSV Import</Label>
+          <textarea value={csv} onChange={(event) => setCsv(event.target.value)} rows={5} placeholder="product_name,platform,category,price,commission,sales_volume,trend_score,opportunity_score,source,affiliate_link,website_url" className="premium-input mt-2 px-3 py-2.5 text-sm" />
+          <button type="button" onClick={importCsv} disabled={saving === "csv"} className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-cyan-500 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{saving === "csv" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Import Manual Real Data</button>
         </div> : null}
 
         <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
@@ -195,8 +227,9 @@ export function ProductIntelligenceCenter() {
             <div className="flex flex-wrap gap-2"><Metric label="Products" value={rankedProducts.length.toString().padStart(2, "0")} /><Metric label="Source" value={source} /><Metric label="Mode" value={sourceConfig[source]?.mode ?? "DEMO"} /><Metric label="Configured" value={sourceConfig[source]?.configured ? "true" : "false"} /></div>
           </div>
           {notice ? <p className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] p-3 text-xs leading-5 text-emerald-100">{notice}</p> : null}
+          {rankedProducts.some((product) => product.dataMode === "DEMO DATA" || product.isDemo) ? <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-3 text-xs leading-5 text-amber-100">Demo data active. Configure API or import real product data to test real workflow.</p> : null}
           {error ? <div className="mt-4"><ErrorCard compact title="Product Intelligence unavailable" description={error} /></div> : null}
-          {loading ? <div className="mt-5 flex min-h-44 items-center justify-center gap-2 rounded-xl border border-white/[0.07] text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading Supabase product ranking...</div> : rankedProducts.length ? <ProductRankingTable products={rankedProducts} savedKeys={savedKeys} saving={saving} onSave={saveOpportunity} onCampaign={setCampaignSeed} onGenerateContent={(product) => { setNotice("Generate Content membutuhkan campaign. Buat campaign dari produk ini terlebih dahulu."); setCampaignSeed(product); }} /> : <div className="mt-5"><EmptyCard title="No products found" description="Tidak ada produk yang cocok dengan source, category, search, atau date filter ini." /></div>}
+        {loading ? <div className="mt-5 flex min-h-44 items-center justify-center gap-2 rounded-xl border border-white/[0.07] text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading Supabase product ranking...</div> : rankedProducts.length ? <ProductRankingTable products={rankedProducts} savedKeys={savedKeys} saving={saving} onSave={saveOpportunity} onCampaign={(product) => setCampaignSeed(productSeed(product))} onGenerateContent={(product) => { setNotice("Generate Content membutuhkan campaign. Buat campaign dari produk ini terlebih dahulu."); setCampaignSeed(productSeed(product)); }} /> : <div className="mt-5"><EmptyCard title="No products found" description="Tidak ada produk yang cocok dengan source, category, search, atau date filter ini. Jika API belum configured, input manual atau import CSV data real." /></div>}
         </div>
 
         <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
@@ -233,9 +266,10 @@ function ProductRankingTable({ products, savedKeys, saving, onSave, onCampaign, 
         </thead>
         <tbody>
           {products.map((product, index) => {
-            const metrics = productMetrics(product, index);
-            const score = product.scoreBreakdown ?? fallbackScore(product);
+            const metrics = productMetrics(product);
+            const score = product.scoreBreakdown;
             const saved = savedKeys.has(savedKey(product.productName, product.source));
+            const missing = product.missingFields ?? [];
             return (
               <tr key={product.id} className="rounded-xl border border-white/[0.07] bg-white/[0.025] text-xs text-slate-300">
                 <td className="rounded-l-xl px-3 py-3 text-sm font-bold text-cyan-100">#{index + 1}</td>
@@ -246,15 +280,15 @@ function ProductRankingTable({ products, savedKeys, saving, onSave, onCampaign, 
                 <td className="px-3 py-3 font-semibold text-emerald-100">{metrics.gmv}</td>
                 <td className="px-3 py-3">{metrics.sales}</td>
                 <td className="px-3 py-3">{metrics.avgPrice}</td>
-                <td className="px-3 py-3"><Badge>{product.commissionEstimate || `${score.commission}%`}</Badge></td>
-                <td className="px-3 py-3 text-cyan-100">+{metrics.growth}%</td>
+                <td className="px-3 py-3"><Badge>{product.commissionRate ? `${product.commissionRate}%` : product.commissionEstimate || "Missing"}</Badge></td>
+                <td className="px-3 py-3 text-cyan-100">{metrics.growth}</td>
                 <td className="px-3 py-3"><ScorePill value={product.contentPotentialScore} /></td>
-                <td className="px-3 py-3"><ScorePill value={product.opportunityScore ?? score.opportunity} strong /></td>
+                <td className="px-3 py-3"><ScorePill value={product.opportunityScore ?? score?.opportunity} strong missing={missing.length ? missing : undefined} /></td>
                 <td className="rounded-r-xl px-3 py-3">
                   <div className="flex min-w-72 flex-wrap gap-2">
                     <button type="button" onClick={() => onSave(product)} disabled={saved || saving === `save-${product.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-2 text-[11px] font-semibold text-slate-200 disabled:opacity-60">{saving === `save-${product.id}` ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : saved ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Save className="h-3.5 w-3.5" />}{saved ? "Saved" : "Save Opportunity"}</button>
-                    <button type="button" onClick={() => onCampaign(product)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-semibold text-white"><PackageSearch className="h-3.5 w-3.5" />Create Campaign</button>
-                    <button type="button" onClick={() => onGenerateContent(product)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 bg-violet-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-violet-100"><Sparkles className="h-3.5 w-3.5" />Generate Content</button>
+                    <button type="button" onClick={() => onCampaign(product)} disabled={Boolean(missing.length)} title={missing.length ? `Missing fields: ${missing.join(", ")}` : undefined} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"><PackageSearch className="h-3.5 w-3.5" />Create Campaign</button>
+                    <button type="button" onClick={() => onGenerateContent(product)} disabled={Boolean(missing.length)} title={missing.length ? `Missing fields: ${missing.join(", ")}` : undefined} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 bg-violet-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"><Sparkles className="h-3.5 w-3.5" />Generate Content</button>
                     {product.sourceUrl ? <a href={product.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-[11px] font-semibold text-slate-400"><ExternalLink className="h-3.5 w-3.5" />Source</a> : null}
                   </div>
                 </td>
@@ -276,17 +310,15 @@ function Badge({ children, muted = false, tone = "cyan" }: { children: React.Rea
 }
 function SourceTypeBadge({ product }: { product: AffiliateProductInsightDto }) {
   const value = product.sourceType ?? (product.isDemo ? "DEMO" : "CACHE");
-  const label = value === "REAL_USER_INPUT" ? "REAL USER INPUT" : value;
+  const label = product.dataMode ?? (value === "REAL_USER_INPUT" ? "MANUAL REAL DATA" : value === "DEMO" ? "DEMO DATA" : "REAL DATA");
   const tone = value === "REAL" || value === "REAL_USER_INPUT" ? "emerald" : value === "CACHE" ? "cyan" : "amber";
   return <Badge tone={tone}>{label}</Badge>;
 }
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2"><p className="text-[9px] uppercase tracking-wide text-slate-600">{label}</p><p className="mt-1 text-xs font-bold text-slate-200">{value}</p></div>; }
-function ScorePill({ value, strong = false }: { value: number; strong?: boolean }) { return <span className={`inline-flex min-w-14 justify-center rounded-full px-2.5 py-1 text-xs font-bold ${strong ? "bg-cyan-300/[0.12] text-cyan-100" : "bg-white/[0.06] text-slate-200"}`}>{value}</span>; }
-function fallbackScore(product: AffiliateProductInsightDto): ProductOpportunityScore { return { demand: product.trendScore, competition: product.competitionLevel === "High" ? 82 : product.competitionLevel === "Medium" ? 58 : 34, commission: Number(product.commissionEstimate.match(/\d+/)?.[0] ?? 0), contentPotential: product.contentPotentialScore, trend: product.trendScore, opportunity: Math.round((product.trendScore + product.contentPotentialScore) / 2) }; }
-function productMetrics(product: AffiliateProductInsightDto, index: number) { const score = product.scoreBreakdown ?? fallbackScore(product); const avg = product.price ?? averagePrice(product.priceRange, index); const sales = product.salesVolume ?? 180 + score.demand * 9 + index * 27; const gmv = product.revenue ?? avg * sales; const growth = Math.max(4, Math.round(score.trend * 0.62 - score.competition * 0.14)); return { avgPrice: avg > 0 ? rupiah(avg) : "Estimated", sales: sales.toLocaleString("id-ID"), gmv: gmv > 0 ? rupiah(gmv) : "Estimated", growth }; }
-function sortValue(product: AffiliateProductInsightDto, sort: (typeof sortOptions)[number]) { const score = product.scoreBreakdown ?? fallbackScore(product); const metrics = productMetricsRaw(product, 0); if (sort === "Revenue / GMV") return metrics.gmv; if (sort === "Sales") return metrics.sales; if (sort === "Commission") return score.commission; if (sort === "Trend Growth") return metrics.growth; return product.opportunityScore ?? score.opportunity; }
-function productMetricsRaw(product: AffiliateProductInsightDto, index: number) { const score = product.scoreBreakdown ?? fallbackScore(product); const avg = product.price ?? averagePrice(product.priceRange, index); const sales = product.salesVolume ?? 180 + score.demand * 9 + index * 27; const gmv = product.revenue ?? avg * sales; const growth = Math.max(4, Math.round(score.trend * 0.62 - score.competition * 0.14)); return { avg, sales, gmv, growth }; }
-function averagePrice(priceRange: string, index: number) { const values = [...priceRange.matchAll(/\d[\d.]*/g)].map((match) => Number(match[0].replace(/\./g, ""))).filter(Boolean); if (values.length >= 2) return Math.round((values[0] + values[1]) / 2); if (values.length === 1) return values[0]; return 99000 + index * 24000; }
+function ScorePill({ value, strong = false, missing }: { value?: number; strong?: boolean; missing?: string[] }) { return <span title={missing?.length ? `Missing fields: ${missing.join(", ")}` : undefined} className={`inline-flex min-w-14 justify-center rounded-full px-2.5 py-1 text-xs font-bold ${missing?.length ? "bg-amber-300/[0.1] text-amber-100" : strong ? "bg-cyan-300/[0.12] text-cyan-100" : "bg-white/[0.06] text-slate-200"}`}>{missing?.length ? "Missing" : value ?? "Missing"}</span>; }
+function productMetrics(product: AffiliateProductInsightDto) { const avg = product.price ?? 0; const sales = product.salesVolume; const gmv = product.revenue ?? (avg && sales ? avg * sales : 0); const growth = product.scoreBreakdown ? `+${Math.max(0, Math.round(product.scoreBreakdown.trend * 0.62 - product.scoreBreakdown.competition * 0.14))}%` : "Missing"; return { avgPrice: avg > 0 ? rupiah(avg) : "Missing", sales: sales ? sales.toLocaleString("id-ID") : "Missing", gmv: gmv > 0 ? rupiah(gmv) : "Missing", growth }; }
+function sortValue(product: AffiliateProductInsightDto, sort: (typeof sortOptions)[number]) { if (sort === "Revenue / GMV") return product.revenue ?? 0; if (sort === "Sales") return product.salesVolume ?? 0; if (sort === "Commission") return product.commissionRate ?? 0; if (sort === "Trend Growth") return product.scoreBreakdown?.trend ?? 0; return product.opportunityScore ?? 0; }
 function rupiah(value: number) { return `Rp${Math.round(value).toLocaleString("id-ID")}`; }
 function savedKey(title: string, source: string) { return `${title}|${source}`.toLowerCase(); }
-function opportunityReason(product: AffiliateProductInsightDto) { const score = product.scoreBreakdown ?? fallbackScore(product); return `Opportunity ${score.opportunity}/100: demand ${score.demand}, competition ${score.competition}, commission ${score.commission}, content potential ${score.contentPotential}, trend ${score.trend}.`; }
+function opportunityReason(product: AffiliateProductInsightDto) { const score = product.scoreBreakdown; return score ? `Opportunity ${score.opportunity}/100: demand ${score.demand}, competition ${score.competition}, commission ${score.commission}, content potential ${score.contentPotential}, trend ${score.trend}.` : `Scoring disabled. Missing fields: ${(product.missingFields ?? []).join(", ") || "unknown"}.`; }
+function productSeed(product: AffiliateProductInsightDto): CampaignProductSeed { return { ...product, productId: product.id, dataMode: product.dataMode, missingProductFields: product.missingFields }; }
