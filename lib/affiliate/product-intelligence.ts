@@ -100,7 +100,7 @@ export class ProductIntelligenceEngine {
     if (input.sync && source) await this.syncSource(source, input.category);
 
     if (input.sourceType === "ALL") {
-      return (await this.readCache(input)).map((product) => this.markSourceType(product));
+      return (await this.readAllSourceProducts(input)).map((product) => this.markSourceType(product));
     }
 
     if (input.sourceType) {
@@ -171,6 +171,12 @@ export class ProductIntelligenceEngine {
       if (products.length) return { sourceType, products };
     }
     return { sourceType: "DEMO" as const, products: [] };
+  }
+
+  private async readAllSourceProducts(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number }) {
+    const perSourceTake = Math.min(Math.max(input.take ?? 70, 1), 140);
+    const groups = await Promise.all((["MANUAL", "CSV_IMPORT", "REAL_API", "DEMO"] as const).map((sourceType) => this.readCache({ ...input, sourceType, take: perSourceTake })));
+    return groups.flat().sort((a, b) => sortValue(b, input.sort) - sortValue(a, input.sort)).slice(0, perSourceTake * 4);
   }
 
   private async readCache(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number; sourceType?: ProductSourceView }) {
