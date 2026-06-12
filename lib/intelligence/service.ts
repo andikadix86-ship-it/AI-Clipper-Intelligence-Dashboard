@@ -23,9 +23,9 @@ export async function getTrendingIntelligence() {
         message: youtube.apiKey ? "API key configured. Real public video search is available." : "YouTube API key belum dikonfigurasi."
       },
       {
-        name: "TikTok / Shopee / Reddit",
+        name: "Meta / TikTok / Manual keyword",
         status: "DEMO",
-        message: "Manual/demo source only. No platform API call is active."
+        message: "Public research/manual input source. Reddit remains optional additional insight, not a core dependency."
       }
     ]
   };

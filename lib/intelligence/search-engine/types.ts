@@ -1,7 +1,7 @@
 export type IntelligenceMode = "creator" | "affiliate";
 export type IntelligenceTimeRange = "7d" | "30d" | "90d";
 export type IntelligencePlatform = "YOUTUBE" | "GOOGLE_TRENDS" | "REDDIT" | "TIKTOK" | "SHOPEE" | "TOKOPEDIA";
-export type AdapterStatus = "CONNECTED" | "MISSING" | "ERROR" | "DEMO";
+export type AdapterStatus = "CONNECTED" | "MISSING" | "NOT_CONFIGURED" | "ERROR" | "DEMO";
 
 export type IntelligenceSearchInput = {
   keyword: string;
@@ -56,4 +56,3 @@ export interface IntelligenceSearchAdapter {
   getStatus(): Promise<AdapterStatus>;
   getProviderInfo(): { name: string; source: string; isDemo: boolean; setupHint?: string };
 }
-

@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const aggregate = await aggregateTrendSignals(input);
     const opportunities = contentOpportunitiesFromAggregate(input, aggregate);
     serverLogger.info("intelligence.trends.aggregated", { platform: input.platform, niche: input.niche, signals: aggregate.signals.length, feedbackSaved: aggregate.feedback.saved });
-    return NextResponse.json({ success: true, data: { aggregate, opportunities }, meta: { generated_at: new Date().toISOString() } });
+    return NextResponse.json({ success: true, data: { aggregate, opportunities, sourceStatuses: aggregate.source_statuses }, meta: { generated_at: new Date().toISOString(), sourceStatuses: aggregate.source_statuses } });
   } catch (error) {
     if (error instanceof TrendAggregationValidationError) return validationError(error.message);
     serverLogger.error("intelligence.trends.failed", error);

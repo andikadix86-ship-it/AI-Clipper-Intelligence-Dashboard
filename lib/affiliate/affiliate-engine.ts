@@ -4,7 +4,7 @@ import { requestStructuredText } from "../providers/structured-text";
 export type AffiliateInput = {
   campaignId?: string;
   productId?: string;
-  dataMode?: "DEMO DATA" | "REAL DATA" | "MANUAL REAL DATA";
+  dataMode?: "DEMO DATA" | "MANUAL DATA" | "CSV IMPORT" | "REAL API";
   isDemo?: boolean;
   productName?: string;
   productCategory: string;

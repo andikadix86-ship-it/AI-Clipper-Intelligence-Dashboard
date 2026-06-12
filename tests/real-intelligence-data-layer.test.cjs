@@ -35,10 +35,9 @@ test("YouTube adapter uses Data API response and clamps scores", async () => {
   assert.ok(rows.every((item) => item.trend_score >= 0 && item.trend_score <= 100));
 });
 
-test("YouTube adapter uses fallback when key is missing", async () => {
+test("YouTube adapter is disabled when key is missing", async () => {
   const rows = await youtubeDataAdapter.collect(input, { env: {} });
-  assert.ok(rows.length);
-  assert.ok(rows.every((item) => item.mode === "fallback"));
+  assert.equal(rows.length, 0);
 });
 
 test("Reddit adapter supports OAuth search with online responses", async () => {
@@ -58,6 +57,11 @@ test("Reddit adapter falls back on timeout", async () => {
     fetchImpl: async (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => reject(new Error("AbortError"))))
   });
   assert.ok(rows.every((item) => item.mode === "fallback"));
+});
+
+test("Reddit adapter is optional when credentials are blank", async () => {
+  const rows = await redditTrendAdapter.collect(input, { env: { REDDIT_CLIENT_ID: "", REDDIT_CLIENT_SECRET: "", REDDIT_USER_AGENT: "" } });
+  assert.equal(rows.length, 0);
 });
 
 test("Knowledge Base adapter returns matching internal signals", async () => {
@@ -82,6 +86,7 @@ test("Trend aggregator combines sources and persists only scores at least 80", a
     assert.ok(result.rising_keywords.includes("rising AI workflow"));
     assert.ok(result.declining_keywords.includes("declining generic tips"));
     assert.equal(knowledge.length, 1);
+    assert.equal(knowledge[0].source_type, "real");
   } finally { await unlink(localFile).catch(() => undefined); }
 });
 

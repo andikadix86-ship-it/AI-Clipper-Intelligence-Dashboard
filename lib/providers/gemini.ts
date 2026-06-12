@@ -6,6 +6,7 @@ import { providerErrorMessage } from "@/lib/providers/errors";
 import { extractGeminiText, GeminiClientError, requestGeminiJson } from "@/lib/providers/gemini-client";
 import { buildCreativeFinalPrompt } from "@/lib/providers/prompt";
 import type { AIProviderAdapter, ProviderGenerateInput, ProviderResult, ProviderTextInput } from "@/lib/providers/types";
+import { serverLogger } from "@/lib/server-logger";
 
 const GEMINI_TEXT_MODEL = "gemini-2.5-flash";
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
@@ -41,6 +42,7 @@ async function callGeminiText(input: ProviderTextInput, instruction: string): Pr
     };
   } catch (error) {
     if (input.allowDummyFallback === false) throw error;
+    if (process.env.NODE_ENV === "development") serverLogger.error("provider.gemini.text_fallback", error);
     const fallback = await dummyProvider.generateCaption(input);
     return {
       ...fallback,
@@ -100,6 +102,7 @@ async function generateGeminiImage(input: ProviderGenerateInput): Promise<Provid
       finalPrompt
     };
   } catch (error) {
+    if (process.env.NODE_ENV === "development") serverLogger.error("provider.gemini.image_fallback", error);
     const fallback = await dummyProvider.generateImage(input);
     return {
       ...fallback,

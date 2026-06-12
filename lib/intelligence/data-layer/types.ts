@@ -1,5 +1,6 @@
 export type TrendSourceName = "Google Trends" | "YouTube" | "Reddit" | "Knowledge Base";
-export type TrendSourceMode = "real" | "fallback" | "knowledge";
+export type TrendSourceMode = "real" | "demo" | "fallback" | "knowledge";
+export type SourceRuntimeStatus = "real" | "disabled";
 
 export type TrendSignal = {
   source: TrendSourceName;
@@ -8,6 +9,12 @@ export type TrendSignal = {
   confidence_score: number;
   collected_at: string;
   mode: TrendSourceMode;
+  message: string;
+};
+
+export type IntelligenceSourceStatus = {
+  source: "youtube" | "google_trends" | "reddit" | "gemini";
+  status: SourceRuntimeStatus;
   message: string;
 };
 
@@ -38,5 +45,6 @@ export type AggregatedTrendSignals = {
   declining_keywords: string[];
   collected_at: string;
   signals: TrendSignal[];
+  source_statuses?: IntelligenceSourceStatus[];
   feedback: { saved: number; skipped: number };
 };

@@ -11,7 +11,7 @@ export async function persistHighConfidenceSignals(input: TrendSourceInput, sign
     content: `${signal.source} trend signal scored ${signal.trend_score}/100 with ${signal.confidence_score}% confidence.`,
     tags: ["trend-signal", signal.source.toLowerCase().replaceAll(" ", "-"), input.niche],
     confidence_score: signal.confidence_score,
-    source_type: "data-driven"
+    source_type: signal.mode === "real" ? "real" : "data-driven"
   }, options.knowledgeOptions)));
   return { saved: eligible.length, skipped: signals.length - eligible.length };
 }

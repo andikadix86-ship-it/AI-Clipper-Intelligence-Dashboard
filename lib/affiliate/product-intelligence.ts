@@ -9,9 +9,11 @@ import { affiliateCategories, affiliateSources, allCategoriesLabel, asAffiliateS
 import type { AffiliateCategory, AffiliateSource } from "@/lib/affiliate/product-intelligence-catalog";
 import { calculateAffiliateProductScore } from "@/lib/affiliate/product-scoring";
 
-export type ProductSourceType = "DEMO" | "CACHE" | "REAL" | "REAL_USER_INPUT";
-export type ProductSourceMode = "DEMO" | "CACHE" | "REAL" | "REAL_USER_INPUT";
+export type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
+export type ProductSourceView = ProductSourceType | "ALL";
+export type ProductSourceMode = ProductSourceType;
 export type ProductSort = "Opportunity Score" | "Revenue / GMV" | "Sales" | "Commission" | "Trend Growth";
+type ProductQuery = { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number; sync?: boolean; sourceType?: ProductSourceView };
 
 type ProductSeed = {
   productName: string;
@@ -26,6 +28,8 @@ type ProductSeed = {
   affiliateUrl?: string;
   revenue?: number;
   salesVolume?: number;
+  competitionLevel?: "Low" | "Medium" | "High";
+  contentPotentialScore?: number;
   sourceType: ProductSourceType;
   notes?: string;
   rawData?: Record<string, unknown>;
@@ -33,6 +37,7 @@ type ProductSeed = {
 
 export type ManualAffiliateProductInput = {
   programName: string;
+  platform?: string;
   websiteUrl: string;
   dashboardUrl: string;
   affiliateLink: string;
@@ -44,6 +49,23 @@ export type ManualAffiliateProductInput = {
   trendScore?: string;
   opportunityScore?: string;
   notes?: string;
+  sourceType?: ProductSourceType;
+};
+
+export type CsvAffiliateProductInput = {
+  productName: string;
+  platform: string;
+  category: string;
+  price?: string;
+  soldCount?: string;
+  rating?: string;
+  reviewCount?: string;
+  commissionRate?: string;
+  marginLevel?: string;
+  productUrl?: string;
+  contentDifficulty?: string;
+  trendLevel?: string;
+  competitionLevel?: string;
 };
 
 type AdapterResult = {
@@ -69,26 +91,30 @@ export const sourceConfig: Record<AffiliateSource, { mode: ProductSourceMode; co
   Lazada: { mode: "DEMO", configured: false },
   Facebook: { mode: "DEMO", configured: false },
   Instagram: { mode: "DEMO", configured: false },
-  "Custom Affiliate": { mode: "REAL_USER_INPUT", configured: true }
+  "Custom Affiliate": { mode: "MANUAL", configured: true }
 };
 
 export class ProductIntelligenceEngine {
-  async getProducts(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number; sync?: boolean } = {}) {
+  async getProducts(input: ProductQuery = {}) {
     const source = input.source ? asAffiliateSource(input.source) : undefined;
     if (input.sync && source) await this.syncSource(source, input.category);
 
-    if (source === "Custom Affiliate") {
-      const custom = await this.readCache({ ...input, source, sourceType: "REAL_USER_INPUT" });
-      return custom.map((product) => this.markSourceType(product));
+    if (input.sourceType === "ALL") {
+      return (await this.readCache(input)).map((product) => this.markSourceType(product));
     }
 
-    const cache = await this.readCache({ ...input, source });
-    if (cache.length) return cache.map((product) => this.markSourceType(product));
+    if (input.sourceType) {
+      const products = await this.readCache({ ...input, sourceType: input.sourceType });
+      if (products.length) return products.map((product) => this.markSourceType(product));
+      if (input.sourceType !== "DEMO") return [];
+    }
 
-    if (!source) return [];
-    const adapter = adapterForSource(source);
+    const active = await this.readActiveProducts(input);
+    if (active.products.length) return active.products.map((product) => this.markSourceType(product));
+
+    const adapter = source ? adapterForSource(source) : demoAllMarketplacesAdapter;
     const result = await adapter.getProducts(input.category);
-    if (!result.configured && !input.sync) return [];
+    serverLogger.info("affiliate.product_intelligence.demo_fallback", { source: source ?? "all", category: input.category, configured: result.configured, mode: result.mode });
     const saved = await Promise.all(result.products.map((product) => this.saveToCache(product)));
     return saved.map((product) => this.markSourceType(product));
   }
@@ -97,13 +123,13 @@ export class ProductIntelligenceEngine {
     return adapterForSource(asAffiliateSource(source ?? "TikTok Shop")).getCategories();
   }
 
-  scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue" | "trendScore" | "opportunityScore">): ProductOpportunityScore | null {
+  scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue" | "trendScore" | "opportunityScore" | "competitionLevel" | "contentPotentialScore">): ProductOpportunityScore | null {
     if (missingProductFields(product).length) return null;
     const hash = createHash("sha256").update(`${product.productName}|${product.platform}|${product.category}`).digest();
     const score = calculateAffiliateProductScore({
       ...product,
       trendScore: product.trendScore ?? (product.revenue ? Math.min(100, 48 + product.revenue / 1_000_000) : 55 + hash[3] % 43),
-      contentPotentialScore: 62 + hash[2] % 35,
+      contentPotentialScore: product.contentPotentialScore ?? 62 + hash[2] % 35,
       policySafetyScore: 62
     });
     return { ...score, opportunity: product.opportunityScore ? bounded(product.opportunityScore) : score.opportunity };
@@ -120,26 +146,41 @@ export class ProductIntelligenceEngine {
   }
 
   markSourceType(product: AffiliateProductInsightDto): AffiliateProductInsightDto {
-    const sourceType = product.sourceType ?? (product.isDemo ? "DEMO" : "CACHE");
+    const sourceType = asSourceType(product.sourceType ?? (product.isDemo ? "DEMO" : "DEMO"));
     return { ...product, sourceType, dataMode: dataMode(sourceType), missingFields: product.missingFields ?? requiredMissing(product), isEstimated: product.isEstimated ?? false };
   }
 
   async syncSource(source: AffiliateSource, category?: string) {
     const adapter = adapterForSource(source);
-    if (source === "Custom Affiliate") return { ...sourceConfig[source], message: "Custom Affiliate memakai input user dari Supabase." };
+    if (source === "Custom Affiliate") return { ...sourceConfig[source], message: "Custom Affiliate memakai input user dari Supabase.", sourceType: "MANUAL" as const };
     const result = await adapter.getProducts(category);
+    serverLogger.info("affiliate.product_intelligence.sync", { source, category, mode: result.mode, configured: result.configured, productCount: result.products.length, sourceType: result.sourceType, message: result.message ?? fallbackMessage(result.configured) });
     await Promise.all(result.products.map((product) => this.saveToCache(product)));
-    return { mode: result.mode, configured: result.configured, message: result.message ?? fallbackMessage(result.configured) };
+    return { mode: result.mode, configured: result.configured, sourceType: result.sourceType, message: result.message ?? fallbackMessage(result.configured) };
   }
 
-  private async readCache(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number; sourceType?: ProductSourceType }) {
+  async getActiveSource(input: ProductQuery = {}) {
+    if (input.sourceType && input.sourceType !== "ALL") return input.sourceType;
+    const active = await this.readActiveProducts(input);
+    return active.sourceType;
+  }
+
+  private async readActiveProducts(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number }) {
+    for (const sourceType of ["MANUAL", "CSV_IMPORT", "REAL_API", "DEMO"] as const) {
+      const products = await this.readCache({ ...input, sourceType });
+      if (products.length) return { sourceType, products };
+    }
+    return { sourceType: "DEMO" as const, products: [] };
+  }
+
+  private async readCache(input: { source?: string; category?: string; dateRange?: string; sort?: ProductSort; take?: number; sourceType?: ProductSourceView }) {
     const source = input.source ? asAffiliateSource(input.source) : undefined;
     const minDate = minDateFromRange(input.dateRange);
     const products = await withTimeout(prisma.affiliateProductInsight.findMany({
       where: {
         category: input.category && input.category !== "All" && input.category !== allCategoriesLabel ? input.category : undefined,
         platform: source,
-        sourceType: input.sourceType,
+        sourceType: input.sourceType === "ALL" ? undefined : input.sourceType,
         collectedAt: minDate ? { gte: minDate } : undefined
       },
       take: Math.min(Math.max(input.take ?? 70, 1), 140)
@@ -150,12 +191,16 @@ export class ProductIntelligenceEngine {
 
 export const productIntelligenceEngine = new ProductIntelligenceEngine();
 
-export async function listProductIntelligence(input: { category?: string; source?: string; dateRange?: string; sort?: ProductSort; take?: number; sync?: boolean } = {}) {
+export async function listProductIntelligence(input: ProductQuery = {}) {
   return productIntelligenceEngine.getProducts(input);
 }
 
 export async function listSourceConfig() {
   return sourceConfig;
+}
+
+export async function getActiveProductSource(input: ProductQuery = {}) {
+  return productIntelligenceEngine.getActiveSource(input);
 }
 
 export async function syncProductIntelligence(input: { source?: string; category?: string } = {}) {
@@ -193,7 +238,7 @@ export async function createManualAffiliateProduct(input: ManualAffiliateProduct
   }));
   const product = await productIntelligenceEngine.saveToCache({
     productName: input.productName.trim(),
-    platform: "Custom Affiliate",
+    platform: input.platform ? asAffiliateSource(input.platform) : "Custom Affiliate",
     category: asCategory(input.category),
     commissionRate,
         price,
@@ -203,11 +248,65 @@ export async function createManualAffiliateProduct(input: ManualAffiliateProduct
     priceRange: rupiahRange(price),
     productUrl: website.toString(),
     affiliateUrl: affiliate.toString(),
-    sourceType: "REAL_USER_INPUT",
+    sourceType: input.sourceType === "CSV_IMPORT" ? "CSV_IMPORT" : "MANUAL",
     notes: input.notes?.trim() || `Manual custom affiliate product from ${input.programName.trim()}.`,
     rawData: { programId: program.id, dashboardUrl: dashboard.toString(), programName: input.programName.trim() }
   });
   await writeAuditLog({ action: "CUSTOM_AFFILIATE_PRODUCT_CREATED", entityType: "AffiliateProductInsight", entityId: product.id, message: `Custom affiliate product created: ${product.productName}.`, metadata: { programId: program.id, category: product.category, opportunityScore: product.opportunityScore } });
+  return product;
+}
+
+export async function createCsvAffiliateProduct(input: CsvAffiliateProductInput) {
+  const productName = input.productName.trim();
+  const platform = asAffiliateSource(input.platform);
+  const category = asCategory(input.category);
+  const price = priceNumber(input.price ?? "0");
+  const soldCount = parseIntNumber(input.soldCount);
+  const rating = decimalNumber(input.rating);
+  const reviewCount = parseIntNumber(input.reviewCount);
+  const commissionRate = commissionNumber(input.commissionRate ?? input.marginLevel ?? "0");
+  const trendScore = scoreFromLevel(input.trendLevel, 58);
+  const contentPotentialScore = scoreFromLevel(input.contentDifficulty, 68, true);
+  const competitionLevel = asCompetition(input.competitionLevel ?? "Medium");
+  const productUrl = optionalPublicUrl(input.productUrl);
+  const score = productIntelligenceEngine.scoreProduct({
+    productName,
+    platform,
+    category,
+    price,
+    commissionRate,
+    salesVolume: soldCount,
+    trendScore,
+    contentPotentialScore,
+    competitionLevel
+  });
+  const product = await productIntelligenceEngine.saveToCache({
+    productName,
+    platform,
+    category,
+    commissionRate,
+    price,
+    salesVolume: soldCount,
+    trendScore,
+    opportunityScore: score?.opportunity,
+    competitionLevel,
+    contentPotentialScore,
+    priceRange: rupiahRange(price),
+    productUrl,
+    affiliateUrl: productUrl,
+    sourceType: "CSV_IMPORT",
+    notes: "CSV_IMPORT product data from user-provided product import.",
+    rawData: {
+      rating,
+      reviewCount,
+      marginLevel: input.marginLevel,
+      contentDifficulty: input.contentDifficulty,
+      trendLevel: input.trendLevel,
+      competitionLevel,
+      csvColumns: input
+    }
+  });
+  await writeAuditLog({ action: "CSV_AFFILIATE_PRODUCT_IMPORTED", entityType: "AffiliateProductInsight", entityId: product.id, message: `CSV affiliate product imported: ${product.productName}.`, metadata: { platform: product.platform, category: product.category, opportunityScore: product.opportunityScore } });
   return product;
 }
 
@@ -222,6 +321,23 @@ export const lazadaAdapter = demoBackedAdapter("Lazada");
 export const facebookAdapter = demoBackedAdapter("Facebook");
 export const instagramAdapter = demoBackedAdapter("Instagram");
 export const demoAdapter = demoBackedAdapter("TikTok Shop");
+const demoAllMarketplacesAdapter: ProductAdapter = {
+  source: "TikTok Shop",
+  mode: "DEMO",
+  configured: false,
+  getCategories: () => [...affiliateCategories],
+  async getProducts(category?: string) {
+    const sources: AffiliateSource[] = ["Shopee", "TikTok Shop", "Tokopedia", "Lazada"];
+    const categories = category && category !== allCategoriesLabel ? [category] : getCategoriesForSource("Shopee");
+    return {
+      products: sources.flatMap((source, sourceIndex) => categories.flatMap((item, categoryIndex) => categoryProducts(item).slice(0, 3).map((productName, index) => demoSeed(source, item, productName, categoryIndex, index + sourceIndex)))),
+      sourceType: "DEMO",
+      mode: "DEMO",
+      configured: false,
+      message: fallbackMessage(false)
+    };
+  }
+};
 
 function demoBackedAdapter(source: AffiliateSource): ProductAdapter {
   return {
@@ -246,7 +362,7 @@ const customAffiliateAdapter: ProductAdapter = {
   ...sourceConfig["Custom Affiliate"],
   getCategories: () => [...getCategoriesForSource("Custom Affiliate")],
   async getProducts() {
-    return { products: [], sourceType: "REAL_USER_INPUT", mode: "REAL_USER_INPUT", configured: true };
+    return { products: [], sourceType: "MANUAL", mode: "MANUAL", configured: true };
   }
 };
 
@@ -307,7 +423,7 @@ function insightData(seed: ProductSeed, score: ProductOpportunityScore | null) {
     salesVolume: seed.salesVolume,
     demandScore: score?.demand,
     trendScore: score?.trend ?? seed.trendScore ?? 0,
-    competitionLevel: score ? score.competition >= 70 ? "High" : score.competition >= 45 ? "Medium" : "Low" : "Medium",
+    competitionLevel: seed.competitionLevel ?? (score ? score.competition >= 70 ? "High" : score.competition >= 45 ? "Medium" : "Low" : "Medium"),
     competitionScore: score?.competition,
     commissionEstimate: `${seed.commissionRate}%`,
     commissionScore: score?.commission,
@@ -318,7 +434,7 @@ function insightData(seed: ProductSeed, score: ProductOpportunityScore | null) {
     lastSyncedAt: new Date(),
     source: seed.platform,
     sourceUrl: seed.affiliateUrl ?? seed.productUrl,
-    confidence: seed.sourceType === "REAL_USER_INPUT" ? 82 : seed.sourceType === "REAL" ? 88 : 35,
+    confidence: seed.sourceType === "MANUAL" || seed.sourceType === "CSV_IMPORT" ? 82 : seed.sourceType === "REAL_API" ? 88 : 35,
     collectedAt: new Date(),
     isDemo: seed.sourceType === "DEMO",
     notes: seed.notes ?? "Imported affiliate program candidate. Review offer details before campaign activation.",
@@ -338,7 +454,7 @@ function toDto(product: {
     trend: product.trendScore,
     opportunity: product.opportunityScore ?? Math.round((product.trendScore + product.contentPotentialScore) / 2)
   };
-  const sourceType = asSourceType(product.sourceType ?? rawData?.sourceType ?? (product.isDemo ? "DEMO" : "CACHE"));
+  const sourceType = asSourceType(product.sourceType ?? rawData?.sourceType ?? "DEMO");
   const missingFields = rawData?.missingFields ?? requiredMissing({ price: product.price ?? undefined, commissionRate: product.commissionRate ?? undefined, salesVolume: product.salesVolume ?? undefined, trendScore: product.trendScore, opportunityScore: product.opportunityScore ?? undefined });
   return {
     ...product,
@@ -354,7 +470,7 @@ function toDto(product: {
     collectedAt: product.collectedAt.toISOString(),
     lastSyncedAt: product.lastSyncedAt?.toISOString(),
     sourceType,
-    dataMode: rawData?.dataMode ?? dataMode(sourceType),
+    dataMode: dataMode(sourceType),
     missingFields,
     isEstimated: product.isEstimated ?? rawData?.isEstimated ?? false,
     opportunityScore: missingFields.length ? undefined : score.opportunity,
@@ -385,7 +501,7 @@ async function fetchAffiliatePage(url: URL, redirectCount = 0): Promise<Response
 
 function productFromUrl(url: URL, page: { title: string; description: string; mode: "html" | "url_fallback" }): ProductSeed {
   const title = page.title.replace(/\s+/g, " ").trim().slice(0, 96) || humanize(url);
-  return { productName: title, platform: sourceFromHost(url.hostname), category: categoryFromText(`${title} ${page.description} ${url.pathname}`), commissionRate: 10, price: 0, priceRange: "Validate from affiliate program", productUrl: url.toString(), affiliateUrl: url.toString(), sourceType: page.mode === "html" ? "REAL" : "CACHE", notes: `Imported from affiliate program URL using ${page.mode === "html" ? "HTML metadata scan" : "URL fallback extraction"}. Validate commission and product details before publishing.` };
+  return { productName: title, platform: sourceFromHost(url.hostname), category: categoryFromText(`${title} ${page.description} ${url.pathname}`), commissionRate: 10, price: 0, priceRange: "Validate from affiliate program", productUrl: url.toString(), affiliateUrl: url.toString(), sourceType: "MANUAL", notes: `User-provided affiliate URL scan using ${page.mode === "html" ? "HTML metadata" : "URL fallback"} extraction. Validate commission and product details before publishing.` };
 }
 
 function validateAffiliateUrl(value: string) {
@@ -395,6 +511,11 @@ function validateAffiliateUrl(value: string) {
   const host = url.hostname.toLowerCase();
   if (host === "localhost" || host.endsWith(".local") || /^127\.|^10\.|^192\.168\.|^169\.254\.|^172\.(1[6-9]|2\d|3[01])\./.test(host)) throw new ProductIntelligenceValidationError("Private network URL tidak diizinkan.");
   return url;
+}
+
+function optionalPublicUrl(value?: string) {
+  if (!value?.trim()) return undefined;
+  try { return validateAffiliateUrl(value).toString(); } catch { return undefined; }
 }
 
 export class ProductIntelligenceValidationError extends Error {
@@ -416,23 +537,38 @@ function competitionScore(value: string) { return value === "High" ? 82 : value 
 function asCompetition(value: string): AffiliateProductInsightDto["competitionLevel"] { return value === "High" || value === "Low" ? value : "Medium"; }
 function asSource(value: string): AffiliateSource { return asAffiliateSource(value); }
 function asCategory(value: string): AffiliateCategory { return affiliateCategories.includes(value) ? value : sourceCategoryMap["Custom Affiliate"][0]; }
-function asSourceType(value: string): ProductSourceType { return value === "REAL" || value === "REAL_USER_INPUT" || value === "CACHE" ? value : "DEMO"; }
+function asSourceType(value: string): ProductSourceType {
+  if (value === "MANUAL" || value === "REAL_USER_INPUT") return "MANUAL";
+  if (value === "CSV_IMPORT") return "CSV_IMPORT";
+  if (value === "REAL_API" || value === "REAL") return "REAL_API";
+  return "DEMO";
+}
 function commissionNumber(value: string | number | null | undefined) {
   if (typeof value === "number") return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 10;
   const parsed = Number(String(value ?? "").match(/\d+(?:[.,]\d+)?/)?.[0]?.replace(",", "."));
   return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 10;
 }
+function decimalNumber(value?: string) {
+  const parsed = Number(String(value ?? "").replace(",", ".").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 function parseIntNumber(value?: string) {
   const parsed = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : undefined;
+}
+function scoreFromLevel(value?: string, fallback = 55, inverse = false) {
+  const normalized = value?.toLowerCase().trim() ?? "";
+  const score = /high|hard|tinggi|sulit/.test(normalized) ? 82 : /medium|sedang/.test(normalized) ? 64 : /low|easy|rendah|mudah/.test(normalized) ? 42 : fallback;
+  return inverse ? 100 - score + 24 : score;
 }
 function priceNumber(value: string) {
   const parsed = Number(value.replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", "."));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 function dataMode(sourceType: ProductSourceType): AffiliateProductInsightDto["dataMode"] {
-  if (sourceType === "REAL_USER_INPUT") return "MANUAL REAL DATA";
-  if (sourceType === "REAL" || sourceType === "CACHE") return "REAL DATA";
+  if (sourceType === "MANUAL") return "MANUAL DATA";
+  if (sourceType === "CSV_IMPORT") return "CSV IMPORT";
+  if (sourceType === "REAL_API") return "REAL API";
   return "DEMO DATA";
 }
 function missingProductFields(product: Pick<ProductSeed, "price" | "commissionRate" | "salesVolume" | "trendScore" | "opportunityScore">) {
@@ -449,4 +585,4 @@ function requiredMissing(product: { price?: number | null; commissionRate?: numb
 }
 function rupiahRange(value: number) { return value > 0 ? rupiah(value) : "Validate from custom program"; }
 function rupiah(value: number) { return `Rp${Math.round(value).toLocaleString("id-ID")}`; }
-function fallbackMessage(configured: boolean) { return configured ? "Product data synced." : "Demo data active. Configure API or import real product data to test real workflow."; }
+function fallbackMessage(configured: boolean) { return configured ? "Product data synced." : "Marketplace API not connected. Showing demo data only."; }

@@ -1,6 +1,8 @@
 import { trendSourceAdapters } from "./adapters";
 import { persistHighConfidenceSignals } from "./feedback-loop";
 import { clampScore } from "./fallback-data";
+import { getIntelligenceSourceStatuses } from "../source-status";
+import { serverLogger } from "../../server-logger";
 import type { AggregatedTrendSignals, TrendSourceAdapter, TrendSourceInput, TrendSourceOptions } from "./types";
 
 export type TrendAggregationOptions = TrendSourceOptions & {
@@ -10,7 +12,15 @@ export type TrendAggregationOptions = TrendSourceOptions & {
 
 export async function aggregateTrendSignals(input: TrendSourceInput, options: TrendAggregationOptions = {}): Promise<AggregatedTrendSignals> {
   validate(input);
-  const signals = (await Promise.all((options.adapters ?? trendSourceAdapters).map((adapter) => adapter.collect(input, options)))).flat();
+  const settled = await Promise.allSettled((options.adapters ?? trendSourceAdapters).map(async (adapter) => ({
+    source: adapter.source,
+    signals: await adapter.collect(input, options)
+  })));
+  const signals = settled.flatMap((result) => {
+    if (result.status === "fulfilled") return result.value.signals;
+    if (process.env.NODE_ENV === "development") serverLogger.error("intelligence.source.unhandled_error", result.reason);
+    return [];
+  });
   const trend = average(signals.map((signal) => signal.trend_score));
   const confidence = average(signals.map((signal) => signal.confidence_score));
   const competition = clampScore(35 + trend * .45);
@@ -31,6 +41,7 @@ export async function aggregateTrendSignals(input: TrendSourceInput, options: Tr
     declining_keywords: unique(sorted.filter((signal) => signal.trend_score < 70).slice(0, 6).map((signal) => signal.keyword)),
     collected_at: new Date().toISOString(),
     signals,
+    source_statuses: await getIntelligenceSourceStatuses(),
     feedback
   };
 }

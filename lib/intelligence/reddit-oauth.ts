@@ -6,13 +6,12 @@ export function getRedditOAuthStatus() {
   const userAgent = process.env.REDDIT_USER_AGENT ?? "";
   const ready = Boolean(clientId && clientSecret && userAgent);
   return {
-    status: ready ? "READY" as const : "SETUP_REQUIRED" as const,
+    status: ready ? "READY" as const : "NOT_CONFIGURED" as const,
     message: ready
-      ? "Reddit OAuth server-side configuration tersedia. Search API belum diaktifkan pada tahap foundation."
-      : "Reddit OAuth belum lengkap. Isi REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, dan REDDIT_USER_AGENT di env server.",
+      ? "Reddit OAuth tersedia sebagai optional insight source."
+      : "Reddit API optional dan belum dikonfigurasi. Sistem memakai fallback/demo mode tanpa Reddit sebagai dependency utama.",
     clientIdMasked: clientId ? maskSecret(clientId) : "",
     clientSecretConfigured: Boolean(clientSecret),
     userAgentConfigured: Boolean(userAgent)
   };
 }
-

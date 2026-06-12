@@ -7,6 +7,7 @@ export type ServerEnv = {
   GEMINI_API_KEY?: string;
   YOUTUBE_DATA_API_KEY?: string;
   YOUTUBE_API_KEY?: string;
+  GOOGLE_TRENDS_API_URL?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
@@ -93,6 +94,7 @@ export function getServerEnv(): ServerEnv {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     YOUTUBE_DATA_API_KEY: process.env.YOUTUBE_DATA_API_KEY,
     YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
+    GOOGLE_TRENDS_API_URL: process.env.GOOGLE_TRENDS_API_URL,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
@@ -117,6 +119,7 @@ export function getSafeEnvStatus() {
     geminiApiKey: process.env.GEMINI_API_KEY ? maskSecret(process.env.GEMINI_API_KEY) : "",
     youtubeDataApiKey: process.env.YOUTUBE_DATA_API_KEY ? maskSecret(process.env.YOUTUBE_DATA_API_KEY) : "",
     youtubeApiKey: process.env.YOUTUBE_API_KEY ? maskSecret(process.env.YOUTUBE_API_KEY) : "",
+    googleTrendsApiUrl: process.env.GOOGLE_TRENDS_API_URL ? "configured" : "missing",
     googleClientId: process.env.GOOGLE_CLIENT_ID ? maskSecret(process.env.GOOGLE_CLIENT_ID) : "",
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ? "configured" : "missing",
     tiktokClientKey: process.env.TIKTOK_CLIENT_KEY ? maskSecret(process.env.TIKTOK_CLIENT_KEY) : "",

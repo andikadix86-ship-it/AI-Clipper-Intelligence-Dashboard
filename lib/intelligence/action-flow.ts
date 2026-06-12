@@ -48,7 +48,7 @@ export type SavedOpportunity = {
 export type AffiliateCampaignDraft = {
   id: string;
   productId?: string;
-  dataMode?: "DEMO DATA" | "REAL DATA" | "MANUAL REAL DATA";
+  dataMode?: "DEMO DATA" | "MANUAL DATA" | "CSV IMPORT" | "REAL API";
   missingProductFields?: string[];
   campaignName: string;
   productName: string;

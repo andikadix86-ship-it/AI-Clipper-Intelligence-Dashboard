@@ -7,6 +7,7 @@ import { EmptyCard, ErrorCard } from "@/components/state-cards";
 import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
 
 const demoWarning = "Demo data active. Configure API or import real product data to test real workflow.";
+type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 
 type Group = "trending" | "commission" | "competition" | "viral" | "recommended";
 
@@ -38,7 +39,7 @@ export function ProductOpportunityCards({ shortlistOnly = false }: { shortlistOn
     const selected = shortlistOnly ? groups.filter((item) => item.id === "recommended") : groups.filter((item) => item.id !== "recommended");
     return selected.map((group) => ({ ...group, product: group.pick(products) }));
   }, [products, shortlistOnly]);
-  const demoActive = products.some((product) => product.dataMode === "DEMO DATA" || product.isDemo);
+  const demoActive = products.some((product) => sourceType(product.sourceType) === "DEMO" || product.isDemo);
 
   return (
     <DashboardPanel title={shortlistOnly ? "Recommended Product Shortlist" : "Product Opportunity Cards"} description={shortlistOnly ? "AI-curated product picks for the next affiliate campaign." : "Start here: compare real product opportunities before researching, campaigning, and publishing."}>
@@ -51,7 +52,7 @@ export function ProductOpportunityCards({ shortlistOnly = false }: { shortlistOn
           <article key={id} className="h-full rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-300/[0.08] text-cyan-200"><Icon className="h-4 w-4" /></div>
-              <DataModeBadge mode={product?.dataMode ?? "DEMO DATA"} />
+              <DataModeBadge mode={sourceType(product?.sourceType)} />
             </div>
             <h3 className="mt-4 text-sm font-semibold text-white">{title}</h3>
             {product ? <ProductFields product={product} /> : <p className="mt-3 text-xs leading-5 text-slate-500">No complete product row available for this category.</p>}
@@ -75,20 +76,22 @@ function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
       <Field label="trend_score" value={number(product.trendScore)} />
       <Field label="opportunity_score" value={product.opportunityScore ? String(product.opportunityScore) : "Missing"} />
       <Field label="source" value={product.source} />
-      <Field label="data_mode" value={product.dataMode ?? (product.isDemo ? "DEMO DATA" : "REAL DATA")} />
+      <Field label="source_type" value={sourceLabel(sourceType(product.sourceType))} />
       {missing.length ? <p className="pt-2 text-[11px] leading-5 text-amber-100">Missing fields: {missing.join(", ")}. Scoring disabled.</p> : null}
     </div>
   );
 }
 
-function DataModeBadge({ mode }: { mode: string }) {
-  const className = mode === "DEMO DATA" ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : mode === "MANUAL REAL DATA" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100";
-  return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${className}`}>{mode}</span>;
+function DataModeBadge({ mode }: { mode: ProductSourceType }) {
+  const className = mode === "DEMO" ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : mode === "MANUAL" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : mode === "CSV_IMPORT" ? "border-blue-300/20 bg-blue-300/[0.08] text-blue-100" : "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100";
+  return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${className}`}>{sourceLabel(mode)}</span>;
 }
 
 function Field({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return <div className="grid grid-cols-[120px_1fr] gap-2"><span className="text-slate-600">{label}</span><span className={strong ? "font-semibold text-white" : "text-slate-300"}>{value}</span></div>;
 }
 function by(rows: AffiliateProductInsightDto[], value: (item: AffiliateProductInsightDto) => number) { return [...rows].sort((a, b) => value(b) - value(a))[0]; }
+function sourceType(value: unknown): ProductSourceType { return value === "MANUAL" || value === "CSV_IMPORT" || value === "REAL_API" ? value : "DEMO"; }
+function sourceLabel(value: ProductSourceType) { return value === "REAL_API" ? "REAL API" : value === "CSV_IMPORT" ? "CSV IMPORT" : value; }
 function money(value?: number) { return value && value > 0 ? `Rp${Math.round(value).toLocaleString("id-ID")}` : "Missing"; }
 function number(value?: number) { return Number.isFinite(value) && value ? value.toLocaleString("id-ID") : "Missing"; }

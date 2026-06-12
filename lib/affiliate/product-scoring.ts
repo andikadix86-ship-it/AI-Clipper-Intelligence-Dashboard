@@ -51,8 +51,7 @@ function contentEaseFromCategory(category?: string) {
 }
 
 function policySafetyFromSource(sourceType?: AffiliateProductInsightDto["sourceType"], confidence?: number) {
-  if (sourceType === "REAL" || sourceType === "REAL_USER_INPUT") return Math.max(72, confidence ?? 78);
-  if (sourceType === "CACHE") return 68;
+  if (sourceType === "REAL_API" || sourceType === "MANUAL" || sourceType === "CSV_IMPORT") return Math.max(72, confidence ?? 78);
   return 62;
 }
 

@@ -6,6 +6,8 @@ import { demoTikTokSearchAdapter } from "@/lib/intelligence/search-engine/adapte
 import { googleTrendsSearchAdapter } from "@/lib/intelligence/search-engine/adapters/google-trends-adapter";
 import { redditSearchAdapter } from "@/lib/intelligence/search-engine/adapters/reddit-adapter";
 import { youtubeSearchAdapter } from "@/lib/intelligence/search-engine/adapters/youtube-adapter";
+import { getIntelligenceSourceStatuses } from "@/lib/intelligence/source-status";
+import { serverLogger } from "@/lib/server-logger";
 import type { IntelligenceAdapterResult, IntelligencePlatform, IntelligenceSearchAdapter, IntelligenceSearchInput, IntelligenceSearchResult } from "@/lib/intelligence/search-engine/types";
 
 const adapters: Record<IntelligencePlatform, IntelligenceSearchAdapter> = {
@@ -27,14 +29,19 @@ export async function searchIntelligence(input: IntelligenceSearchInput) {
       cached: true,
       runId: cached.id,
       results: cached.results.map(mapStoredResult),
-      providers: await providerStates(normalized.platforms)
+      providers: await providerStates(normalized.platforms),
+      sourceStatuses: await getIntelligenceSourceStatuses()
     };
   }
 
-  const adapterResponses = await Promise.all(normalized.platforms.map(async (platform) => ({
-    platform,
-    response: await adapters[platform].search(normalized)
-  })));
+  const adapterResponses = await Promise.all(normalized.platforms.map(async (platform) => {
+    try {
+      return { platform, response: await adapters[platform].search(normalized) };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") serverLogger.error("intelligence.search.provider_failed", error, { platform });
+      return { platform, response: { status: "ERROR", message: `${platform} provider failed. Returning partial results from other sources.`, results: [] } satisfies IntelligenceAdapterResult };
+    }
+  }));
   const results = adapterResponses.flatMap(({ response }) => response.results).slice(0, 50);
   const cacheKey = makeSearchCacheKey(normalized);
   const run = await prisma.intelligenceSearchRun.create({
@@ -60,14 +67,15 @@ export async function searchIntelligence(input: IntelligenceSearchInput) {
     cached: false,
     runId: run.id,
     results,
-    providers: adapterResponses.map(({ platform, response }) => ({ platform, status: response.status, message: response.message }))
+    providers: adapterResponses.map(({ platform, response }) => ({ platform, status: response.status, message: response.message })),
+    sourceStatuses: await getIntelligenceSourceStatuses()
   };
 }
 
 function normalizeInput(input: IntelligenceSearchInput): IntelligenceSearchInput {
   const keyword = input.keyword.trim();
   if (keyword.length < 2) throw new Error("Keyword minimal 2 karakter.");
-  const platforms = input.platforms.length ? [...new Set(input.platforms)] : ["YOUTUBE", "GOOGLE_TRENDS"] as IntelligencePlatform[];
+  const platforms = input.platforms.length ? [...new Set(input.platforms)] : ["GOOGLE_TRENDS", "YOUTUBE", "TIKTOK"] as IntelligencePlatform[];
   return {
     ...input,
     keyword,
@@ -97,7 +105,7 @@ function persistableResult(result: IntelligenceSearchResult) {
     region: result.region,
     language: result.language,
     collectedAt: new Date(result.collectedAt),
-    rawData: JSON.parse(JSON.stringify({ ...result.rawData, normalizedResult: result })) as Prisma.InputJsonValue,
+    rawData: JSON.parse(JSON.stringify({ ...result.rawData, sourceType: result.isDemo ? "demo" : "real", normalizedResult: result })) as Prisma.InputJsonValue,
     isDemo: result.isDemo,
     notes: result.notes
   };
@@ -119,8 +127,14 @@ function mapStoredResult(row: {
 }
 
 async function providerStates(platforms: IntelligencePlatform[]) {
-  return Promise.all(platforms.map(async (platform) => ({ platform, status: await adapters[platform].getStatus(), message: adapters[platform].getProviderInfo().setupHint ?? adapters[platform].getProviderInfo().source })));
+  return Promise.all(platforms.map(async (platform) => {
+    try {
+      return { platform, status: await adapters[platform].getStatus(), message: adapters[platform].getProviderInfo().setupHint ?? adapters[platform].getProviderInfo().source };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") serverLogger.error("intelligence.search.provider_status_failed", error, { platform });
+      return { platform, status: "ERROR" as const, message: "Provider status check failed." };
+    }
+  }));
 }
 
 export type IntelligenceSearchResponse = Awaited<ReturnType<typeof searchIntelligence>>;
-

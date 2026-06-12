@@ -2,6 +2,7 @@ import { calculateYouTubeScore } from "@/lib/intelligence/scoring";
 import { resolveYouTubeDataApiKey, updateYouTubeProviderStatus } from "@/lib/intelligence/provider-settings";
 import type { IntelligenceResultDto } from "@/lib/intelligence/types";
 import { logYouTubeQuota } from "@/lib/intelligence/youtube-quota";
+import { serverLogger } from "@/lib/server-logger";
 
 type YouTubeSearchItem = {
   id?: { videoId?: string };
@@ -162,6 +163,7 @@ export async function collectYouTubeIntelligence(request: YouTubeSearchRequest):
     await updateYouTubeProviderStatus("CONNECTED");
     return { status: "READY", message: `${results.length} hasil YouTube real berhasil dikumpulkan.`, results };
   } catch (error) {
+    if (process.env.NODE_ENV === "development") serverLogger.error("intelligence.youtube.api_error", error);
     const friendly = friendlyYouTubeError(error instanceof Error ? error.message : "Unknown YouTube error.");
     await updateYouTubeProviderStatus(friendly.status === "QUOTA_LIMITED" ? "QUOTA_LIMITED" : "ERROR", friendly.message);
     return { status: friendly.status, message: friendly.message, results: [] };

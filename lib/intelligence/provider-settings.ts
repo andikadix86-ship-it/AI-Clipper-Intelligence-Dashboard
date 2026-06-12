@@ -3,7 +3,7 @@ import { decodeSecret, encodeSecret, maskSecret } from "@/lib/security";
 import { getRedditOAuthStatus } from "@/lib/intelligence/reddit-oauth";
 import { getYouTubeQuotaSummary } from "@/lib/intelligence/youtube-quota";
 
-export type IntelligenceProviderStatus = "CONNECTED" | "MISSING" | "ERROR" | "QUOTA_LIMITED" | "DEMO";
+export type IntelligenceProviderStatus = "CONNECTED" | "MISSING" | "NOT_CONFIGURED" | "ERROR" | "QUOTA_LIMITED" | "DEMO";
 
 export async function resolveYouTubeDataApiKey() {
   const setting = await prisma.intelligenceProviderSetting.findUnique({ where: { provider: "YOUTUBE_DATA_API" } });
@@ -34,19 +34,28 @@ export async function getIntelligenceProviderSettings() {
     {
       provider: "GOOGLE_TRENDS",
       label: "Google Trends",
-      status: "DEMO",
+      status: process.env.GOOGLE_TRENDS_API_URL ? "CONNECTED" : "NOT_CONFIGURED",
       apiKeyMasked: "",
-      credentialSource: "demo",
-      lastError: "",
+      credentialSource: process.env.GOOGLE_TRENDS_API_URL ? "env" : "none",
+      lastError: process.env.GOOGLE_TRENDS_API_URL ? "" : "GOOGLE_TRENDS_API_URL is not configured.",
       lastCheckedAt: undefined
     },
     {
       provider: "REDDIT_OAUTH",
       label: "Reddit OAuth",
-      status: reddit.status,
+      status: reddit.status === "READY" ? "CONNECTED" : "NOT_CONFIGURED",
       apiKeyMasked: reddit.clientIdMasked,
       credentialSource: "env",
       lastError: reddit.status === "READY" ? "" : reddit.message,
+      lastCheckedAt: undefined
+    },
+    {
+      provider: "GEMINI_API",
+      label: "Gemini API",
+      status: process.env.GEMINI_API_KEY ? "CONNECTED" : "NOT_CONFIGURED",
+      apiKeyMasked: process.env.GEMINI_API_KEY ? maskSecret(process.env.GEMINI_API_KEY) : "",
+      credentialSource: process.env.GEMINI_API_KEY ? "env" : "none",
+      lastError: process.env.GEMINI_API_KEY ? "" : "GEMINI_API_KEY is not configured.",
       lastCheckedAt: undefined
     }
   ];

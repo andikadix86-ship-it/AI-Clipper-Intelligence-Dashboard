@@ -121,7 +121,7 @@ export function CampaignCreationModal({ open, seed, onClose, onSaved }: Campaign
           <Field label="Campaign Name" value={form.campaignName} onChange={(campaignName) => setForm({ ...form, campaignName })} />
           <Field label="Product" value={form.productName} onChange={(productName) => setForm({ ...form, productName })} />
           <Field label="Product Source" value={seed?.source ?? "Affiliate Center"} onChange={() => {}} disabled />
-          <Field label="Data Mode" value={seed?.dataMode ?? (seed?.isDemo ? "DEMO DATA" : "REAL DATA")} onChange={() => {}} disabled />
+          <Field label="Data Mode" value={seed?.dataMode ?? (seed?.isDemo ? "DEMO DATA" : "MANUAL DATA")} onChange={() => {}} disabled />
           <Field label="Category" value={seed?.category ?? "Affiliate Product"} onChange={() => {}} disabled />
           <div className="md:col-span-2"><Field label="Audience" value={form.targetAudience} onChange={(targetAudience) => setForm({ ...form, targetAudience })} /></div>
           <div className="md:col-span-2"><Field label="Goal" value={form.contentObjective} onChange={(contentObjective) => setForm({ ...form, contentObjective })} /></div>

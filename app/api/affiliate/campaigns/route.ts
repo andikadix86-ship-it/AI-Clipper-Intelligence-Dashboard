@@ -62,7 +62,7 @@ function campaignData(body: Record<string, unknown>) {
       targetPlatforms: strings(body.targetPlatforms),
       budget: String(body.budget ?? metadata?.budget ?? ""),
       productId: optional(body.productId),
-      dataMode: String(body.dataMode ?? metadata?.dataMode ?? (body.isDemo === true ? "DEMO DATA" : "REAL DATA")),
+      dataMode: String(body.dataMode ?? metadata?.dataMode ?? (body.isDemo === true ? "DEMO DATA" : "MANUAL DATA")),
       missingProductFields: strings(body.missingProductFields)
     }
   };

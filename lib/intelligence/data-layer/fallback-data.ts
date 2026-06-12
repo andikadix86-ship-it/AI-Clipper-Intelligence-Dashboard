@@ -1,6 +1,6 @@
-import type { TrendSignal, TrendSourceInput, TrendSourceName } from "./types";
+import type { TrendSignal, TrendSourceInput, TrendSourceMode, TrendSourceName } from "./types";
 
-export function fallbackTrendSignals(source: TrendSourceName, input: TrendSourceInput, message: string): TrendSignal[] {
+export function fallbackTrendSignals(source: TrendSourceName, input: TrendSourceInput, message: string, mode: Extract<TrendSourceMode, "demo" | "fallback"> = "fallback"): TrendSignal[] {
   const keyword = input.keyword.trim() || input.niche.trim();
   const rows = source === "YouTube"
     ? [[keyword, 74], [`${keyword} untuk pemula`, 81], [`kesalahan ${keyword}`, 69]]
@@ -15,7 +15,7 @@ export function fallbackTrendSignals(source: TrendSourceName, input: TrendSource
     trend_score: Number(score),
     confidence_score: source === "Knowledge Base" ? 50 : 38,
     collected_at: new Date().toISOString(),
-    mode: "fallback",
+    mode,
     message
   }));
 }
