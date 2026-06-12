@@ -9,6 +9,7 @@ const { googleTrendsDataAdapter, youtubeDataAdapter, redditTrendAdapter, knowled
 const { aggregateTrendSignals } = require("../lib/intelligence/data-layer/aggregator.ts");
 const { generateAffiliateOpportunities, generateContentOpportunities } = require("../lib/intelligence/data-layer/opportunities.ts");
 const { saveKnowledge, searchKnowledge } = require("../lib/knowledge-base/repository.ts");
+const { calculateAffiliateProductScore } = require("../lib/affiliate/product-scoring.ts");
 
 const input = { niche: "creator economy", platform: "tiktok", keyword: "AI content workflow" };
 const noDatabase = { disableDatabase: true, disableLocalJson: true };
@@ -99,4 +100,79 @@ test("Content and affiliate opportunity engines return structured recommendation
   assert.equal(affiliate.product_category, "electronics");
   assert.ok(affiliate.demand_score >= 0 && affiliate.demand_score <= 100);
   assert.ok(affiliate.suggested_content_angles.length);
+});
+
+test("Affiliate product scoring marks high sales, high commission, and low competition as high opportunity", () => {
+  const score = calculateAffiliateProductScore({
+    productName: "High Signal Product",
+    platform: "Shopee",
+    category: "Kitchen Tools",
+    salesVolume: 4200,
+    commissionRate: 20,
+    competitionLevel: "Low",
+    trendScore: 86,
+    contentPotentialScore: 84,
+    rating: 4.8,
+    reviewCount: 680,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.equal(score.opportunityLabel, "HIGH OPPORTUNITY");
+  assert.ok(score.finalOpportunityScore >= 80);
+  assert.ok(score.demandScore >= 90);
+  assert.ok(score.marginScore >= 95);
+});
+
+test("Affiliate product scoring marks low sales and high competition as monitor only", () => {
+  const score = calculateAffiliateProductScore({
+    productName: "Weak Signal Product",
+    platform: "Lazada",
+    category: "Digital Accessories",
+    salesVolume: 1,
+    commissionRate: 4,
+    competitionLevel: "High",
+    trendScore: 25,
+    contentPotentialScore: 38,
+    rating: 3.2,
+    reviewCount: 2,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.equal(score.opportunityLabel, "MONITOR ONLY");
+  assert.ok(score.finalOpportunityScore <= 39);
+});
+
+test("CSV_IMPORT product scoring includes trust and final opportunity score", () => {
+  const score = calculateAffiliateProductScore({
+    productName: "CSV Serum",
+    platform: "TikTok Shop",
+    category: "Beauty & Personal Care",
+    salesVolume: 1700,
+    commissionRate: 14,
+    competitionLevel: "Medium",
+    trendScore: 82,
+    contentPotentialScore: 76,
+    rating: 4.9,
+    reviewCount: 420,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.equal(score.opportunityLabel, "MEDIUM OPPORTUNITY");
+  assert.ok(score.trustScore >= 85);
+  assert.ok(score.finalOpportunityScore >= 60 && score.finalOpportunityScore <= 79);
+});
+
+test("MANUAL product scoring works without rating and review fields", () => {
+  const score = calculateAffiliateProductScore({
+    productName: "Manual Organizer",
+    platform: "Custom Affiliate",
+    category: "Home Living",
+    salesVolume: 900,
+    commissionRate: 12,
+    competitionLevel: "Medium",
+    trendScore: 72,
+    contentPotentialScore: 78,
+    sourceType: "MANUAL",
+    confidence: 82
+  });
+  assert.ok(score.trustScore >= 68);
+  assert.ok(score.finalOpportunityScore >= 60);
+  assert.equal(score.opportunityLabel, "MEDIUM OPPORTUNITY");
 });

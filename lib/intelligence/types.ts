@@ -64,6 +64,13 @@ export type ProductOpportunityScore = {
   contentPotential: number;
   trend: number;
   opportunity: number;
+  demandScore: number;
+  marginScore: number;
+  competitionScore: number;
+  trendScore: number;
+  contentEaseScore: number;
+  trustScore: number;
+  finalOpportunityScore: number;
 };
 
 export type TrendScoreInput = {

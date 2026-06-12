@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CampaignCreationModal, type CampaignProductSeed } from "@/components/affiliate/campaign-creation-modal";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
-import { calculateAffiliateProductScore } from "@/lib/affiliate/product-scoring";
+import { calculateAffiliateProductScore, productContentRecommendation, productOpportunityInsight, type ContentRecommendation, type OpportunityLabel } from "@/lib/affiliate/product-scoring";
 import { allCategoriesLabel, sourceCategoryMap } from "@/lib/affiliate/product-intelligence-catalog";
 import { persistOpportunity } from "@/lib/intelligence/affiliate-persistence";
 import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
@@ -15,7 +15,7 @@ type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 type ProductSourceView = "ACTIVE" | "ALL" | ProductSourceType;
 type DataStatus = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 type CategorySourceStatus = DataStatus | "MIXED" | "EMPTY";
-type OpportunityLevel = "All Levels" | "High Opportunity" | "Medium Opportunity" | "Low Opportunity" | "Risky Product";
+type OpportunityLevel = "All Levels" | OpportunityLabel;
 type MarginFilter = "All Margins" | "High Margin" | "Medium Margin" | "Low Margin";
 type TrendFilter = "All Trends" | "Rising" | "Stable" | "Monitor";
 type SortOption = "Highest Score" | "Highest Demand" | "Lowest Competition" | "Highest Margin" | "Viral Potential";
@@ -26,9 +26,11 @@ type ProductView = AffiliateProductInsightDto & {
   estimatedDemand: "High" | "Medium" | "Low";
   marginPotential: "High" | "Medium" | "Low";
   viralPotential: "High" | "Medium" | "Low";
+  trustPotential: "High" | "Medium" | "Low";
   contentDifficulty: "Easy" | "Medium" | "Hard";
   opportunityLevel: Exclude<OpportunityLevel, "All Levels">;
   recommendedAction: string;
+  contentRecommendation: ContentRecommendation;
   dataStatus: DataStatus;
   trendStatus: Exclude<TrendFilter, "All Trends">;
 };
@@ -244,7 +246,7 @@ export function ProductIntelligenceCenter() {
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Products" value={String(filteredProducts.length).padStart(2, "0")} detail="Matched active filters" />
           <MetricCard label="Average Score" value={average(filteredProducts.map((item) => item.affiliateOpportunityScore)).toString()} detail="Affiliate opportunity" />
-          <MetricCard label="High Opportunity" value={String(filteredProducts.filter((item) => item.opportunityLevel === "High Opportunity").length)} detail="Ready for content test" />
+          <MetricCard label="High Opportunity" value={String(filteredProducts.filter((item) => item.opportunityLevel === "HIGH OPPORTUNITY").length)} detail="Ready for content test" />
           <MetricCard label="Source" value={sourceViewLabel(sourceSummary.sourceType)} detail={marketplaceStatus} />
         </div>
       </DashboardPanel>
@@ -304,11 +306,12 @@ function Shortlist({ products, savedKeys, saving, onSelect, onSave, onCampaign }
               <MiniMetric label="Demand" value={product.estimatedDemand} />
               <MiniMetric label="Competition" value={product.competitionLevel} />
               <MiniMetric label="Margin" value={product.marginPotential} />
-              <MiniMetric label="Viral" value={product.viralPotential} />
-              <MiniMetric label="Content" value={product.contentDifficulty} />
+              <MiniMetric label="Trend" value={product.viralPotential} />
+              <MiniMetric label="Trust" value={product.trustPotential} />
               <MiniMetric label="Score" value={`${product.affiliateOpportunityScore}/100`} strong />
             </div>
             <p className="mt-4 text-xs leading-5 text-slate-400">{product.recommendedAction}</p>
+            <p className="mt-2 text-[11px] font-semibold text-cyan-100">{product.contentRecommendation}</p>
             <div className="mt-auto flex flex-wrap gap-2 pt-4">
               <button type="button" onClick={() => onSelect(product)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-2 text-[11px] font-semibold text-slate-200">Detail<ChevronRight className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => onSave(product)} disabled={saved || saving === `save-${product.id}`} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-cyan-100 disabled:opacity-60">{saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}{saved ? "Saved" : "Save"}</button>
@@ -333,7 +336,7 @@ function Filters(props: { sourceView: ProductSourceView; platform: string; categ
         <label><Label>Source</Label><select value={props.sourceView} onChange={(event) => props.onSourceView(event.target.value as ProductSourceView)} className="premium-input mt-1.5 px-3 py-2.5 text-sm">{sourceViewOptions.map((option) => <option key={option} value={option}>{sourceViewLabel(option)}</option>)}</select></label>
         <Select label="Platform" value={props.platform} options={["All Platforms", ...platforms]} onChange={props.onPlatform} />
         <Select label="Category" value={props.category} options={[allCategoriesLabel, ...affiliateCategories]} onChange={props.onCategory} />
-        <Select label="Opportunity" value={props.opportunityLevel} options={["All Levels", "High Opportunity", "Medium Opportunity", "Low Opportunity", "Risky Product"]} onChange={(value) => props.onOpportunityLevel(value as OpportunityLevel)} />
+        <Select label="Opportunity" value={props.opportunityLevel} options={["All Levels", "HIGH OPPORTUNITY", "MEDIUM OPPORTUNITY", "LOW OPPORTUNITY", "MONITOR ONLY"]} onChange={(value) => props.onOpportunityLevel(value as OpportunityLevel)} />
         <Select label="Competition" value={props.competition} options={["All Competition", "Low", "Medium", "High"]} onChange={props.onCompetition} />
         <Select label="Margin" value={props.marginPotential} options={["All Margins", "High Margin", "Medium Margin", "Low Margin"]} onChange={(value) => props.onMarginPotential(value as MarginFilter)} />
         <Select label="Trend" value={props.trendStatus} options={["All Trends", "Rising", "Stable", "Monitor"]} onChange={(value) => props.onTrendStatus(value as TrendFilter)} />
@@ -380,8 +383,9 @@ function ProductDetailModal({ product, onClose, onCampaign }: { product?: Produc
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <MetricCard label="Affiliate Score" value={`${product.affiliateOpportunityScore}/100`} detail="Weighted product score" />
           <MetricCard label="Demand" value={product.estimatedDemand} detail={`${product.salesVolume?.toLocaleString("id-ID") ?? "Demo"} signal`} />
-          <MetricCard label="Content Difficulty" value={product.contentDifficulty} detail={product.trendStatus} />
+          <MetricCard label="Content" value={product.contentRecommendation} detail={product.trendStatus} />
         </div>
+        <ScoreBreakdownGrid product={product} />
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           <DetailBlock title="Product Overview" value={product.notes || `${product.productName} untuk niche ${product.category}.`} />
           <DetailBlock title="Why Recommended" value={content.whyRecommended} />
@@ -421,6 +425,20 @@ function ConfirmClearDemoModal({ open, onCancel, onConfirm }: { open: boolean; o
   );
 }
 
+function ScoreBreakdownGrid({ product }: { product: ProductView }) {
+  const score = product.scoreBreakdown ?? calculateAffiliateProductScore(product);
+  const rows = [
+    ["Demand", score.demandScore],
+    ["Margin", score.marginScore],
+    ["Competition", score.competitionScore],
+    ["Trend", score.trendScore],
+    ["Content Ease", score.contentEaseScore],
+    ["Trust", score.trustScore],
+    ["Final", score.finalOpportunityScore]
+  ] as const;
+  return <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-7">{rows.map(([label, value]) => <MiniMetric key={label} label={label} value={`${value}/100`} strong={label === "Final"} />)}</div>;
+}
+
 function ManualProductForm({ manual, saving, onChange, onSave }: { manual: typeof initialManual; saving: boolean; onChange: (value: typeof initialManual) => void; onSave: () => void }) {
   return <div className="mt-5 grid gap-3 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] p-4 md:grid-cols-2 xl:grid-cols-4"><Field label="Program Name" value={manual.programName} onChange={(programName) => onChange({ ...manual, programName })} /><Field label="Website URL" value={manual.websiteUrl} onChange={(websiteUrl) => onChange({ ...manual, websiteUrl })} /><Field label="Dashboard URL" value={manual.dashboardUrl} onChange={(dashboardUrl) => onChange({ ...manual, dashboardUrl })} /><Field label="Affiliate Link" value={manual.affiliateLink} onChange={(affiliateLink) => onChange({ ...manual, affiliateLink })} /><Field label="Commission" value={manual.commission} onChange={(commission) => onChange({ ...manual, commission })} /><Field label="Price" value={manual.price} onChange={(price) => onChange({ ...manual, price })} /><Field label="Sales Volume" value={manual.salesVolume} onChange={(salesVolume) => onChange({ ...manual, salesVolume })} /><Field label="Trend Score" value={manual.trendScore} onChange={(trendScore) => onChange({ ...manual, trendScore })} /><Field label="Opportunity Score" value={manual.opportunityScore} onChange={(opportunityScore) => onChange({ ...manual, opportunityScore })} /><Field label="Product Name" value={manual.productName} onChange={(productName) => onChange({ ...manual, productName })} /><Select label="Category" value={manual.category} options={sourceCategoryMap["Custom Affiliate"]} onChange={(category) => onChange({ ...manual, category })} /><Field label="Notes" value={manual.notes} onChange={(notes) => onChange({ ...manual, notes })} /><button type="button" onClick={onSave} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Save Product</button></div>;
 }
@@ -458,14 +476,15 @@ async function fetchJson(url: string, init?: RequestInit) {
 
 function toProductView(product: AffiliateProductInsightDto): ProductView {
   const score = calculateAffiliateProductScore(product);
-  const affiliateOpportunityScore = product.opportunityScore ?? score.opportunity;
-  const marginPotential = level(score.marginPotential);
-  const viralPotential = level(score.viralPotential);
-  const estimatedDemand = level(score.demand);
-  const contentDifficulty = score.contentEase >= 76 ? "Easy" : score.contentEase >= 55 ? "Medium" : "Hard";
-  const opportunityLevel = product.competitionLevel === "High" && affiliateOpportunityScore < 65 ? "Risky Product" : affiliateOpportunityScore >= 78 ? "High Opportunity" : affiliateOpportunityScore >= 62 ? "Medium Opportunity" : "Low Opportunity";
-  const trendStatus = score.viralPotential >= 74 ? "Rising" : score.viralPotential >= 56 ? "Stable" : "Monitor";
-  return { ...product, affiliateOpportunityScore, estimatedDemand, marginPotential, viralPotential, contentDifficulty, opportunityLevel, trendStatus, dataStatus: dataStatus(product), recommendedAction: recommendedAction(opportunityLevel, product.competitionLevel) };
+  const affiliateOpportunityScore = score.finalOpportunityScore;
+  const marginPotential = level(score.marginScore);
+  const viralPotential = level(score.trendScore);
+  const trustPotential = level(score.trustScore);
+  const estimatedDemand = level(score.demandScore);
+  const contentDifficulty = score.contentEaseScore >= 76 ? "Easy" : score.contentEaseScore >= 55 ? "Medium" : "Hard";
+  const opportunityLevel = score.opportunityLabel;
+  const trendStatus = score.trendScore >= 74 ? "Rising" : score.trendScore >= 56 ? "Stable" : "Monitor";
+  return { ...product, opportunityScore: affiliateOpportunityScore, scoreBreakdown: score, affiliateOpportunityScore, estimatedDemand, marginPotential, viralPotential, trustPotential, contentDifficulty, opportunityLevel, trendStatus, dataStatus: dataStatus(product), recommendedAction: productOpportunityInsight(product, score), contentRecommendation: productContentRecommendation(product, score) };
 }
 
 function filterAndSortProducts(products: ProductView[], filter: { platform: string; category: string; opportunityLevel: OpportunityLevel; competition: string; marginPotential: MarginFilter; trendStatus: TrendFilter; sortBy: SortOption; query: string }) {
@@ -509,17 +528,16 @@ function sourceStatusMessage(sourceTypeValue: ProductSourceType) {
 }
 
 function affiliateContent(product: ProductView) {
-  const category = product.category.toLowerCase();
-  const style = /mom|baby/.test(category) ? "Mom daily life style" : /fashion muslim/.test(category) ? "Islamic soft selling" : product.contentDifficulty === "Easy" ? "UGC style" : product.viralPotential === "High" ? "Before after" : "Problem solution";
+  const style = product.contentRecommendation;
   return {
-    whyRecommended: `${product.estimatedDemand} demand, ${product.marginPotential} margin, ${product.viralPotential} viral potential, dan score ${product.affiliateOpportunityScore}/100.`,
+    whyRecommended: `${product.estimatedDemand} demand, ${product.marginPotential} margin, ${product.viralPotential} trend, ${product.trustPotential} trust, dan score ${product.affiliateOpportunityScore}/100.`,
     targetAudience: targetAudience(product.category),
     hook: `Aku test ${product.productName}, ternyata ini yang bikin ${product.category} lebih praktis.`,
-    angle: contentTypeForCategory(product.category),
+    angle: product.contentRecommendation,
     caption: `${product.productName} cocok buat yang butuh solusi praktis di kategori ${product.category}. Simpan dulu sebelum checkout.`,
-    cta: product.opportunityLevel === "High Opportunity" ? "Cek link produk dan bandingkan promo hari ini." : "Simpan dulu, cek review, lalu putuskan saat promo aktif.",
+    cta: product.opportunityLevel === "HIGH OPPORTUNITY" ? "Cek link produk dan bandingkan promo hari ini." : "Simpan dulu, cek review, lalu putuskan saat promo aktif.",
     hashtag: `#affiliateindonesia #${slug(product.category)} #${slug(product.platform)} #reviewproduk`,
-    riskNotes: product.opportunityLevel === "Risky Product" ? "Competition tinggi atau sinyal score belum kuat. Validasi review, policy, dan klaim produk sebelum dipublish." : "Tetap validasi stok, komisi, klaim produk, dan kebijakan platform sebelum upload.",
+    riskNotes: product.opportunityLevel === "MONITOR ONLY" ? "Competition tinggi atau sinyal score belum kuat. Validasi review, policy, dan klaim produk sebelum dipublish." : "Tetap validasi stok, komisi, klaim produk, dan kebijakan platform sebelum upload.",
     postingPlatform: product.platform === "TikTok Shop" ? "TikTok Shop + TikTok short video" : "TikTok, Instagram Reels, dan marketplace video review",
     format: product.contentDifficulty === "Easy" ? "30-45 detik review natural dengan demo penggunaan" : "45-60 detik problem-solution dengan bukti visual",
     style
@@ -539,7 +557,7 @@ function CategoryValidityBadge({ sourceType }: { sourceType: CategorySourceStatu
   const label = sourceType === "EMPTY" ? "NO DATA" : sourceType === "DEMO" ? "DEMO ONLY" : sourceType === "MIXED" ? "MIXED SOURCES" : `VALID FROM ${sourceType}`;
   return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${demoOnly ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100"}`}>{label}</span>;
 }
-function OpportunityBadge({ level }: { level: ProductView["opportunityLevel"] }) { const tone = level === "High Opportunity" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : level === "Medium Opportunity" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : level === "Risky Product" ? "border-rose-300/20 bg-rose-300/[0.08] text-rose-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"; return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone}`}>{level}</span>; }
+function OpportunityBadge({ level }: { level: ProductView["opportunityLevel"] }) { const tone = level === "HIGH OPPORTUNITY" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : level === "MEDIUM OPPORTUNITY" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : level === "MONITOR ONLY" ? "border-rose-300/20 bg-rose-300/[0.08] text-rose-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"; return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone}`}>{level}</span>; }
 function TrendBadge({ status }: { status: ProductView["trendStatus"] }) { const icon = status === "Rising" ? <TrendingUp className="h-3.5 w-3.5" /> : status === "Stable" ? <Target className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />; return <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200">{icon}{status}</span>; }
 function ScorePill({ value }: { value: number }) { return <span className="rounded-full bg-cyan-300/[0.12] px-2.5 py-1 text-xs font-bold text-cyan-100">{value}</span>; }
 function ShortlistSkeleton() { return <div className="grid gap-3 xl:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="min-h-[270px] animate-pulse rounded-xl border border-white/[0.07] bg-white/[0.035]" />)}</div>; }
@@ -569,12 +587,11 @@ function downloadCsvTemplate() {
   URL.revokeObjectURL(url);
 }
 function level(value: number): "High" | "Medium" | "Low" { return value >= 72 ? "High" : value >= 52 ? "Medium" : "Low"; }
-function recommendedAction(levelValue: ProductView["opportunityLevel"], competitionLevel: ProductView["competitionLevel"]) { if (levelValue === "High Opportunity") return "Prioritaskan untuk review natural dan campaign cepat."; if (levelValue === "Medium Opportunity") return competitionLevel === "Low" ? "Test konten ringan, lanjutkan jika CTR bagus." : "Validasi angle dan promo sebelum scale."; if (levelValue === "Risky Product") return "Monitor dulu, cek klaim produk dan kompetitor."; return "Simpan sebagai backup niche, jangan jadikan prioritas."; }
-function sortValue(product: ProductView, sortBy: SortOption) { const score = calculateAffiliateProductScore(product); if (sortBy === "Highest Demand") return score.demand; if (sortBy === "Lowest Competition") return 100 - score.competition; if (sortBy === "Highest Margin") return score.marginPotential; if (sortBy === "Viral Potential") return score.viralPotential; return product.affiliateOpportunityScore; }
+function sortValue(product: ProductView, sortBy: SortOption) { const score = product.scoreBreakdown ?? calculateAffiliateProductScore(product); if (sortBy === "Highest Demand") return score.demandScore; if (sortBy === "Lowest Competition") return score.competitionScore; if (sortBy === "Highest Margin") return score.marginScore; if (sortBy === "Viral Potential") return score.trendScore; return score.finalOpportunityScore; }
 function average(values: number[]) { const valid = values.filter((value) => Number.isFinite(value)); return valid.length ? Math.round(valid.reduce((total, value) => total + value, 0) / valid.length) : 0; }
-function contentTypeForCategory(category: string) { const value = category.toLowerCase(); if (/beauty/.test(value)) return "Before after, review natural"; if (/mom|baby/.test(value)) return "Mom daily life style"; if (/home|kitchen/.test(value)) return "Problem solution demo"; if (/fashion muslim/.test(value)) return "Islamic soft selling"; if (/food|snack/.test(value)) return "Taste test, UGC style"; return "Review natural, story selling"; }
+function contentTypeForCategory(category: string) { const value = category.toLowerCase(); if (/fashion muslim/.test(value)) return "Islamic soft selling"; if (/beauty/.test(value)) return "Before-after"; if (/mom|baby|home|kitchen/.test(value)) return "Problem solution demo"; if (/food|snack/.test(value)) return "UGC style"; if (/digital|accessories/.test(value)) return "Comparison video"; return "Review natural"; }
 function targetAudience(category: string) { const value = category.toLowerCase(); if (/mom|baby/.test(value)) return "Ibu muda, keluarga muda, dan pembeli kebutuhan anak."; if (/fashion muslim/.test(value)) return "Muslimah aktif yang mencari produk rapi, nyaman, dan sopan."; if (/health/.test(value)) return "Audience yang ingin rutinitas hidup lebih sehat dan praktis."; if (/digital/.test(value)) return "Creator, pekerja mobile, dan pengguna gadget harian."; return "Pembeli pemula yang mencari produk praktis dengan value jelas."; }
-function opportunityReason(product: ProductView) { return `Affiliate Opportunity Score ${product.affiliateOpportunityScore}/100: demand ${product.estimatedDemand}, margin ${product.marginPotential}, viral ${product.viralPotential}, competition ${product.competitionLevel}, content difficulty ${product.contentDifficulty}.`; }
+function opportunityReason(product: ProductView) { return `Final Opportunity Score ${product.affiliateOpportunityScore}/100: demand ${product.estimatedDemand}, margin ${product.marginPotential}, trend ${product.viralPotential}, trust ${product.trustPotential}, competition ${product.competitionLevel}. ${product.recommendedAction}`; }
 function productSeed(product: ProductView): CampaignProductSeed { return { ...product, productId: product.id, dataMode: product.dataMode, missingProductFields: product.missingFields }; }
 function savedKey(title: string, source: string) { return `${title}|${source}`.toLowerCase(); }
 function slug(value: string) { return value.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "").slice(0, 32); }

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit-log";
 import { withTimeout } from "@/lib/db-timeout";
@@ -30,6 +29,8 @@ type ProductSeed = {
   salesVolume?: number;
   competitionLevel?: "Low" | "Medium" | "High";
   contentPotentialScore?: number;
+  rating?: number;
+  reviewCount?: number;
   sourceType: ProductSourceType;
   notes?: string;
   rawData?: Record<string, unknown>;
@@ -123,16 +124,8 @@ export class ProductIntelligenceEngine {
     return adapterForSource(asAffiliateSource(source ?? "TikTok Shop")).getCategories();
   }
 
-  scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue" | "trendScore" | "opportunityScore" | "competitionLevel" | "contentPotentialScore">): ProductOpportunityScore | null {
-    if (missingProductFields(product).length) return null;
-    const hash = createHash("sha256").update(`${product.productName}|${product.platform}|${product.category}`).digest();
-    const score = calculateAffiliateProductScore({
-      ...product,
-      trendScore: product.trendScore ?? (product.revenue ? Math.min(100, 48 + product.revenue / 1_000_000) : 55 + hash[3] % 43),
-      contentPotentialScore: product.contentPotentialScore ?? 62 + hash[2] % 35,
-      policySafetyScore: 62
-    });
-    return { ...score, opportunity: product.opportunityScore ? bounded(product.opportunityScore) : score.opportunity };
+  scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue" | "trendScore" | "opportunityScore" | "competitionLevel" | "contentPotentialScore" | "sourceType" | "rating" | "reviewCount" | "rawData">): ProductOpportunityScore {
+    return calculateAffiliateProductScore(product);
   }
 
   async saveToCache(seed: ProductSeed) {
@@ -284,7 +277,10 @@ export async function createCsvAffiliateProduct(input: CsvAffiliateProductInput)
     salesVolume: soldCount,
     trendScore,
     contentPotentialScore,
-    competitionLevel
+    competitionLevel,
+    sourceType: "CSV_IMPORT",
+    rating,
+    reviewCount
   });
   const product = await productIntelligenceEngine.saveToCache({
     productName,
@@ -294,9 +290,11 @@ export async function createCsvAffiliateProduct(input: CsvAffiliateProductInput)
     price,
     salesVolume: soldCount,
     trendScore,
-    opportunityScore: score?.opportunity,
+    opportunityScore: score.finalOpportunityScore,
     competitionLevel,
     contentPotentialScore,
+    rating,
+    reviewCount,
     priceRange: rupiahRange(price),
     productUrl,
     affiliateUrl: productUrl,
@@ -414,7 +412,7 @@ function categoryProducts(category: string) {
   return ["Best Seller Bundle", "Daily Use Product", "Creator Demo Kit", "Value Pack Starter", "Premium Trial Offer", "Compact Utility Set", "Problem Solver Pack", "Seasonal Promo Product", "Starter Bundle", "Pro Upgrade Offer"];
 }
 
-function insightData(seed: ProductSeed, score: ProductOpportunityScore | null) {
+function insightData(seed: ProductSeed, score: ProductOpportunityScore) {
   const missingFields = missingProductFields(seed);
   return {
     productName: seed.productName,
@@ -427,15 +425,15 @@ function insightData(seed: ProductSeed, score: ProductOpportunityScore | null) {
     commissionRate: seed.commissionRate,
     revenue: seed.revenue,
     salesVolume: seed.salesVolume,
-    demandScore: score?.demand,
-    trendScore: score?.trend ?? seed.trendScore ?? 0,
-    competitionLevel: seed.competitionLevel ?? (score ? score.competition >= 70 ? "High" : score.competition >= 45 ? "Medium" : "Low" : "Medium"),
-    competitionScore: score?.competition,
+    demandScore: score.demandScore,
+    trendScore: score.trendScore,
+    competitionLevel: seed.competitionLevel ?? (score.competition >= 70 ? "High" : score.competition >= 45 ? "Medium" : "Low"),
+    competitionScore: score.competitionScore,
     commissionEstimate: `${seed.commissionRate}%`,
-    commissionScore: score?.commission,
+    commissionScore: score.marginScore,
     priceRange: seed.priceRange ?? rupiahRange(seed.price),
-    contentPotentialScore: score?.contentPotential ?? 0,
-    opportunityScore: score?.opportunity,
+    contentPotentialScore: score.contentEaseScore,
+    opportunityScore: score.finalOpportunityScore,
     isEstimated: false,
     lastSyncedAt: new Date(),
     source: seed.platform,
@@ -451,16 +449,26 @@ function insightData(seed: ProductSeed, score: ProductOpportunityScore | null) {
 function toDto(product: {
   id: string; productName: string; platform: string; category: string; sourceType?: string; productUrl?: string | null; affiliateUrl?: string | null; price?: number | null; commissionRate?: number | null; revenue?: number | null; salesVolume?: number | null; demandScore?: number | null; trendScore: number; competitionLevel: string; competitionScore?: number | null; commissionEstimate: string; commissionScore?: number | null; priceRange: string; contentPotentialScore: number; opportunityScore?: number | null; isEstimated?: boolean | null; lastSyncedAt?: Date | null; source: string; sourceUrl: string | null; confidence: number; collectedAt: Date; isDemo: boolean; notes: string; rawData: unknown;
 }): AffiliateProductInsightDto {
-  const rawData = product.rawData as { scoreBreakdown?: ProductOpportunityScore | null; sourceType?: ProductSourceType; isEstimated?: boolean; missingFields?: string[]; dataMode?: AffiliateProductInsightDto["dataMode"] } | null;
-  const score = rawData?.scoreBreakdown ?? {
-    demand: product.demandScore ?? product.trendScore,
-    competition: product.competitionScore ?? competitionScore(product.competitionLevel),
-    commission: product.commissionScore ?? commissionNumber(product.commissionEstimate),
-    contentPotential: product.contentPotentialScore,
-    trend: product.trendScore,
-    opportunity: product.opportunityScore ?? Math.round((product.trendScore + product.contentPotentialScore) / 2)
-  };
+  const rawData = product.rawData as { scoreBreakdown?: Partial<ProductOpportunityScore> | null; sourceType?: ProductSourceType; isEstimated?: boolean; missingFields?: string[]; dataMode?: AffiliateProductInsightDto["dataMode"]; rating?: number; reviewCount?: number } | null;
   const sourceType = asSourceType(product.sourceType ?? rawData?.sourceType ?? "DEMO");
+  const score = calculateAffiliateProductScore({
+    productName: product.productName,
+    platform: asSource(product.platform),
+    category: product.category,
+    price: product.price ?? undefined,
+    commissionRate: product.commissionRate ?? undefined,
+    revenue: product.revenue ?? undefined,
+    salesVolume: product.salesVolume ?? undefined,
+    trendScore: product.trendScore,
+    competitionLevel: asCompetition(product.competitionLevel),
+    contentPotentialScore: product.contentPotentialScore,
+    opportunityScore: product.opportunityScore ?? rawData?.scoreBreakdown?.finalOpportunityScore ?? rawData?.scoreBreakdown?.opportunity,
+    sourceType,
+    confidence: product.confidence,
+    rating: rawData?.rating,
+    reviewCount: rawData?.reviewCount,
+    rawData
+  });
   const missingFields = rawData?.missingFields ?? requiredMissing({ price: product.price ?? undefined, commissionRate: product.commissionRate ?? undefined, salesVolume: product.salesVolume ?? undefined, trendScore: product.trendScore, opportunityScore: product.opportunityScore ?? undefined });
   return {
     ...product,
@@ -479,8 +487,8 @@ function toDto(product: {
     dataMode: dataMode(sourceType),
     missingFields,
     isEstimated: product.isEstimated ?? rawData?.isEstimated ?? false,
-    opportunityScore: missingFields.length ? undefined : score.opportunity,
-    scoreBreakdown: missingFields.length ? undefined : score
+    opportunityScore: score.finalOpportunityScore,
+    scoreBreakdown: score
   };
 }
 
@@ -533,7 +541,7 @@ function minDateFromRange(dateRange?: string) {
   const days = match ? Number(match[1]) : 0;
   return days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : undefined;
 }
-function sortValue(product: AffiliateProductInsightDto, sort?: ProductSort) { const score = product.scoreBreakdown; if (sort === "Revenue / GMV") return product.revenue ?? 0; if (sort === "Sales") return product.salesVolume ?? 0; if (sort === "Commission") return score?.commission ?? 0; if (sort === "Trend Growth") return score?.trend ?? product.trendScore; return product.opportunityScore ?? score?.opportunity ?? 0; }
+function sortValue(product: AffiliateProductInsightDto, sort?: ProductSort) { const score = product.scoreBreakdown; if (sort === "Revenue / GMV") return product.revenue ?? 0; if (sort === "Sales") return product.salesVolume ?? 0; if (sort === "Commission") return score?.marginScore ?? score?.commission ?? 0; if (sort === "Trend Growth") return score?.trendScore ?? score?.trend ?? product.trendScore; return score?.finalOpportunityScore ?? product.opportunityScore ?? score?.opportunity ?? 0; }
 function sourceFromHost(host: string): AffiliateSource { const value = host.toLowerCase(); if (value.includes("tiktok")) return "TikTok Shop"; if (value.includes("shopee")) return "Shopee"; if (value.includes("tokopedia")) return "Tokopedia"; if (value.includes("lazada")) return "Lazada"; if (value.includes("facebook")) return "Facebook"; if (value.includes("instagram")) return "Instagram"; return "Custom Affiliate"; }
 function categoryFromText(text: string): AffiliateCategory { const value = text.toLowerCase(); if (/beauty|serum|skin|lip|hair|cosmetic/.test(value)) return "Beauty & Personal Care"; if (/gadget|phone|camera|usb|mic|earbud|tech|electronic/.test(value)) return "Electronics"; if (/fashion|shirt|bag|hijab|shoe|sandal/.test(value)) return "Women's Fashion"; if (/health|fit|yoga|sleep|meal|hydration/.test(value)) return "Health"; if (/kids|anak|baby|toy|school/.test(value)) return "Baby & Kids"; if (/digital|course|ebook|template|notion|canva|prompt|ai|saas|software/.test(value)) return "AI Tools"; return "Home & Living"; }
 function humanize(url: URL) { return decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() ?? url.hostname).replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()); }
@@ -586,7 +594,6 @@ function requiredMissing(product: { price?: number | null; commissionRate?: numb
   if (!product.commissionRate || product.commissionRate <= 0) missing.push("commission");
   if (!Number.isFinite(product.salesVolume ?? NaN) || (product.salesVolume ?? 0) <= 0) missing.push("sales_volume");
   if (!Number.isFinite(product.trendScore ?? NaN) || (product.trendScore ?? 0) <= 0) missing.push("trend_score");
-  if (!Number.isFinite(product.opportunityScore ?? NaN) || (product.opportunityScore ?? 0) <= 0) missing.push("opportunity_score");
   return missing;
 }
 function rupiahRange(value: number) { return value > 0 ? rupiah(value) : "Validate from custom program"; }

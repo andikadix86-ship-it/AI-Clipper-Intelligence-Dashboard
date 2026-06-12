@@ -4,6 +4,7 @@ import { BarChart3, Flame, Sparkles, Target, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
+import { calculateAffiliateProductScore, productContentRecommendation, productOpportunityInsight } from "@/lib/affiliate/product-scoring";
 import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
 
 const demoWarning = "Demo data active. Configure API or import real product data to test real workflow.";
@@ -12,11 +13,11 @@ type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 type Group = "trending" | "commission" | "competition" | "viral" | "recommended";
 
 const groups: Array<{ id: Group; title: string; icon: typeof TrendingUp; pick: (rows: AffiliateProductInsightDto[]) => AffiliateProductInsightDto | undefined }> = [
-  { id: "trending", title: "Trending Products", icon: TrendingUp, pick: (rows) => by(rows, (item) => item.trendScore) },
-  { id: "commission", title: "High Commission Products", icon: BarChart3, pick: (rows) => by(rows, (item) => item.commissionRate ?? 0) },
-  { id: "competition", title: "Low Competition Products", icon: Target, pick: (rows) => by(rows.filter((item) => item.competitionLevel === "Low"), (item) => item.opportunityScore ?? 0) },
-  { id: "viral", title: "Viral Products", icon: Flame, pick: (rows) => by(rows, (item) => item.trendScore + item.contentPotentialScore) },
-  { id: "recommended", title: "Recommended Products", icon: Sparkles, pick: (rows) => by(rows.filter((item) => !item.missingFields?.length), (item) => item.opportunityScore ?? 0) }
+  { id: "trending", title: "Trending Products", icon: TrendingUp, pick: (rows) => by(rows, (item) => score(item).trendScore) },
+  { id: "commission", title: "High Commission Products", icon: BarChart3, pick: (rows) => by(rows, (item) => score(item).marginScore) },
+  { id: "competition", title: "Low Competition Products", icon: Target, pick: (rows) => by(rows.filter((item) => item.competitionLevel === "Low"), (item) => score(item).competitionScore) },
+  { id: "viral", title: "Viral Products", icon: Flame, pick: (rows) => by(rows, (item) => score(item).trendScore + score(item).contentEaseScore) },
+  { id: "recommended", title: "Recommended Products", icon: Sparkles, pick: (rows) => by(rows, (item) => score(item).finalOpportunityScore) }
 ];
 
 export function ProductOpportunityCards({ shortlistOnly = false }: { shortlistOnly?: boolean }) {
@@ -65,6 +66,7 @@ export function ProductOpportunityCards({ shortlistOnly = false }: { shortlistOn
 
 function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
   const missing = product.missingFields ?? [];
+  const productScore = score(product);
   return (
     <div className="mt-3 space-y-1.5 text-xs text-slate-400">
       <Field label="product_name" value={product.productName} strong />
@@ -73,11 +75,15 @@ function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
       <Field label="price" value={money(product.price)} />
       <Field label="commission" value={product.commissionRate ? `${product.commissionRate}%` : product.commissionEstimate || "Missing"} />
       <Field label="sales_volume" value={number(product.salesVolume)} />
-      <Field label="trend_score" value={number(product.trendScore)} />
-      <Field label="opportunity_score" value={product.opportunityScore ? String(product.opportunityScore) : "Missing"} />
+      <Field label="trend_score" value={number(productScore.trendScore)} />
+      <Field label="trust_score" value={number(productScore.trustScore)} />
+      <Field label="final_score" value={String(productScore.finalOpportunityScore)} />
+      <Field label="label" value={productScore.opportunityLabel} />
+      <Field label="content" value={productContentRecommendation(product, productScore)} />
       <Field label="source" value={product.source} />
       <Field label="source_type" value={sourceLabel(sourceType(product.sourceType))} />
-      {missing.length ? <p className="pt-2 text-[11px] leading-5 text-amber-100">Missing fields: {missing.join(", ")}. Scoring disabled.</p> : null}
+      <p className="pt-2 text-[11px] leading-5 text-slate-300">{productOpportunityInsight(product, productScore)}</p>
+      {missing.length ? <p className="pt-2 text-[11px] leading-5 text-amber-100">Missing fields: {missing.join(", ")}. Score uses normalized fallback where needed.</p> : null}
     </div>
   );
 }
@@ -91,6 +97,7 @@ function Field({ label, value, strong = false }: { label: string; value: string;
   return <div className="grid grid-cols-[120px_1fr] gap-2"><span className="text-slate-600">{label}</span><span className={strong ? "font-semibold text-white" : "text-slate-300"}>{value}</span></div>;
 }
 function by(rows: AffiliateProductInsightDto[], value: (item: AffiliateProductInsightDto) => number) { return [...rows].sort((a, b) => value(b) - value(a))[0]; }
+function score(product: AffiliateProductInsightDto) { return calculateAffiliateProductScore(product); }
 function sourceType(value: unknown): ProductSourceType { return value === "MANUAL" || value === "CSV_IMPORT" || value === "REAL_API" ? value : "DEMO"; }
 function sourceLabel(value: ProductSourceType) { return value === "REAL_API" ? "REAL API" : value === "CSV_IMPORT" ? "CSV IMPORT" : value; }
 function money(value?: number) { return value && value > 0 ? `Rp${Math.round(value).toLocaleString("id-ID")}` : "Missing"; }
