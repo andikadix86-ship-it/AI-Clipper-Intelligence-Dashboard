@@ -4,7 +4,8 @@ import { BarChart3, Flame, Sparkles, Target, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
-import { calculateAffiliateProductScore, productContentRecommendation, productOpportunityInsight } from "@/lib/affiliate/product-scoring";
+import { generateProductContentStrategy } from "@/lib/affiliate/product-content-strategy";
+import { calculateAffiliateProductScore, productOpportunityInsight } from "@/lib/affiliate/product-scoring";
 import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
 
 const demoWarning = "Demo data active. Configure API or import real product data to test real workflow.";
@@ -67,6 +68,7 @@ export function ProductOpportunityCards({ shortlistOnly = false }: { shortlistOn
 function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
   const missing = product.missingFields ?? [];
   const productScore = score(product);
+  const strategy = product.contentStrategy ?? generateProductContentStrategy(product, productScore);
   return (
     <div className="mt-3 space-y-1.5 text-xs text-slate-400">
       <Field label="product_name" value={product.productName} strong />
@@ -79,10 +81,16 @@ function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
       <Field label="trust_score" value={number(productScore.trustScore)} />
       <Field label="final_score" value={String(productScore.finalOpportunityScore)} />
       <Field label="label" value={productScore.opportunityLabel} />
-      <Field label="content" value={productContentRecommendation(product, productScore)} />
+      <Field label="content_format" value={strategy.bestContentFormat} />
+      <Field label="best_angle" value={strategy.contentAngle} />
+      <Field label="cta" value={strategy.CTA} />
       <Field label="source" value={product.source} />
       <Field label="source_type" value={sourceLabel(sourceType(product.sourceType))} />
       <p className="pt-2 text-[11px] leading-5 text-slate-300">{productOpportunityInsight(product, productScore)}</p>
+      <div className="pt-2 text-[11px] leading-5 text-slate-300">
+        <p className="font-semibold text-slate-200">Hook ideas:</p>
+        {strategy.hookIdeas.map((hook, index) => <p key={hook}>{index + 1}. {hook}</p>)}
+      </div>
       {missing.length ? <p className="pt-2 text-[11px] leading-5 text-amber-100">Missing fields: {missing.join(", ")}. Score uses normalized fallback where needed.</p> : null}
     </div>
   );

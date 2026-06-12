@@ -1,4 +1,4 @@
-import type { AffiliateProductInsightDto, ProductOpportunityScore } from "@/lib/intelligence/types";
+import type { AffiliateProductInsightDto, ProductContentFormat, ProductOpportunityScore } from "@/lib/intelligence/types";
 
 export type AffiliateProductScoreInput = Partial<Pick<AffiliateProductInsightDto, "productName" | "platform" | "category" | "salesVolume" | "trendScore" | "competitionLevel" | "commissionRate" | "contentPotentialScore" | "opportunityScore" | "sourceType" | "confidence">> & {
   price?: number;
@@ -17,7 +17,7 @@ export type AffiliateProductScoreResult = ProductOpportunityScore & {
 };
 
 export type OpportunityLabel = "HIGH OPPORTUNITY" | "MEDIUM OPPORTUNITY" | "LOW OPPORTUNITY" | "MONITOR ONLY";
-export type ContentRecommendation = "Review natural" | "Problem solution demo" | "Before-after" | "Story selling" | "UGC style" | "Comparison video" | "Islamic soft selling";
+export type ContentRecommendation = ProductContentFormat;
 
 export function calculateAffiliateProductScore(product: AffiliateProductScoreInput): AffiliateProductScoreResult {
   const raw = asRecord(product.rawData);
@@ -81,11 +81,14 @@ export function productOpportunityInsight(product: AffiliateProductScoreInput, s
 
 export function productContentRecommendation(product: AffiliateProductScoreInput, score = calculateAffiliateProductScore(product)): ContentRecommendation {
   const category = product.category?.toLowerCase() ?? "";
-  if (/fashion muslim/.test(category)) return "Islamic soft selling";
-  if (/beauty|personal care/.test(category)) return "Before-after";
-  if (/home|kitchen|health|mom|baby/.test(category)) return "Problem solution demo";
-  if (score.trustScore >= 78 && score.demandScore >= 70) return "Review natural";
+  if (/fashion muslim|muslim|hijab|modest/.test(category)) return "Islamic soft selling";
+  if (/beauty|personal care|skincare|serum|sunscreen/.test(category)) return "Beauty transformation";
+  if (/mom|baby|kids|ibu|anak|bayi/.test(category)) return "Mom solution";
+  if (/home|living|kitchen|rumah|dapur/.test(category)) return "Home improvement";
   if (product.competitionLevel === "High") return "Comparison video";
+  if (/education|edukasi|course|digital|ai tools|software|saas|template|ebook|membership/.test(category)) return "Educational soft selling";
+  if (/health/.test(category)) return "Problem solution demo";
+  if (score.trustScore >= 78 && score.demandScore >= 70) return "Review natural";
   if (score.contentEaseScore >= 74) return "UGC style";
   return "Story selling";
 }

@@ -53,8 +53,41 @@ export type AffiliateProductInsightDto = {
   notes: string;
   opportunityScore?: number;
   scoreBreakdown?: ProductOpportunityScore;
+  contentStrategy?: ProductContentStrategy;
   isEstimated?: boolean;
   lastSyncedAt?: string;
+};
+
+export type ProductContentFormat =
+  | "Review natural"
+  | "Problem solution demo"
+  | "Before-after"
+  | "UGC style"
+  | "Comparison video"
+  | "Story selling"
+  | "Islamic soft selling"
+  | "Educational soft selling"
+  | "Mom solution"
+  | "Home improvement"
+  | "Beauty transformation";
+
+export type ProductContentStrategy = {
+  bestContentFormat: ProductContentFormat;
+  contentAngle: string;
+  hookIdeas: [string, string, string];
+  shortScript: {
+    openingHook: string;
+    problem: string;
+    productSolution: string;
+    proofOrBenefit: string;
+    CTA: string;
+  };
+  caption: string;
+  hashtagSet: string[];
+  CTA: string;
+  platformRecommendation: string;
+  postingDifficulty: "Easy" | "Medium" | "Hard";
+  testingPlan: string;
 };
 
 export type ProductOpportunityScore = {

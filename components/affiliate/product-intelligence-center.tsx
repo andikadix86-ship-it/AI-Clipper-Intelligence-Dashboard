@@ -5,10 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CampaignCreationModal, type CampaignProductSeed } from "@/components/affiliate/campaign-creation-modal";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
-import { calculateAffiliateProductScore, productContentRecommendation, productOpportunityInsight, type ContentRecommendation, type OpportunityLabel } from "@/lib/affiliate/product-scoring";
+import { generateProductContentStrategy } from "@/lib/affiliate/product-content-strategy";
+import { calculateAffiliateProductScore, productOpportunityInsight, type OpportunityLabel } from "@/lib/affiliate/product-scoring";
 import { allCategoriesLabel, sourceCategoryMap } from "@/lib/affiliate/product-intelligence-catalog";
 import { persistOpportunity } from "@/lib/intelligence/affiliate-persistence";
-import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
+import type { AffiliateProductInsightDto, ProductContentFormat, ProductContentStrategy } from "@/lib/intelligence/types";
 
 type MarketplacePlatform = "Shopee" | "TikTok Shop" | "Tokopedia" | "Lazada";
 type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
@@ -30,7 +31,8 @@ type ProductView = AffiliateProductInsightDto & {
   contentDifficulty: "Easy" | "Medium" | "Hard";
   opportunityLevel: Exclude<OpportunityLevel, "All Levels">;
   recommendedAction: string;
-  contentRecommendation: ContentRecommendation;
+  contentRecommendation: ProductContentFormat;
+  contentStrategy: ProductContentStrategy;
   dataStatus: DataStatus;
   trendStatus: Exclude<TrendFilter, "All Trends">;
 };
@@ -311,9 +313,14 @@ function Shortlist({ products, savedKeys, saving, onSelect, onSave, onCampaign }
               <MiniMetric label="Score" value={`${product.affiliateOpportunityScore}/100`} strong />
             </div>
             <p className="mt-4 text-xs leading-5 text-slate-400">{product.recommendedAction}</p>
-            <p className="mt-2 text-[11px] font-semibold text-cyan-100">{product.contentRecommendation}</p>
+            <div className="mt-3 rounded-lg border border-cyan-300/10 bg-cyan-300/[0.035] p-3">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Recommended Content Format</p>
+              <p className="mt-1 text-[11px] font-semibold text-cyan-100">{product.contentStrategy.bestContentFormat}</p>
+              <p className="mt-2 text-[9px] font-semibold uppercase tracking-wide text-slate-500">Best Angle</p>
+              <p className="mt-1 text-[11px] leading-4 text-slate-300">{product.contentStrategy.contentAngle}</p>
+            </div>
             <div className="mt-auto flex flex-wrap gap-2 pt-4">
-              <button type="button" onClick={() => onSelect(product)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-2 text-[11px] font-semibold text-slate-200">Detail<ChevronRight className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => onSelect(product)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-2 text-[11px] font-semibold text-slate-200">View Strategy<ChevronRight className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => onSave(product)} disabled={saved || saving === `save-${product.id}`} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-cyan-100 disabled:opacity-60">{saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}{saved ? "Saved" : "Save"}</button>
               <button type="button" onClick={() => onCampaign(product)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-semibold text-white"><PackageSearch className="h-3.5 w-3.5" />Create Campaign</button>
             </div>
@@ -372,7 +379,7 @@ function PlatformProductList({ platform, products, onSelect }: { platform: Marke
 
 function ProductDetailModal({ product, onClose, onCampaign }: { product?: ProductView; onClose: () => void; onCampaign: (product: ProductView) => void }) {
   if (!product) return null;
-  const content = affiliateContent(product);
+  const strategy = product.contentStrategy;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 p-0 backdrop-blur-sm md:items-center md:p-6">
       <section className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-white/[0.08] bg-slate-950 p-5 shadow-2xl md:max-w-4xl md:rounded-2xl">
@@ -383,22 +390,22 @@ function ProductDetailModal({ product, onClose, onCampaign }: { product?: Produc
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <MetricCard label="Affiliate Score" value={`${product.affiliateOpportunityScore}/100`} detail="Weighted product score" />
           <MetricCard label="Demand" value={product.estimatedDemand} detail={`${product.salesVolume?.toLocaleString("id-ID") ?? "Demo"} signal`} />
-          <MetricCard label="Content" value={product.contentRecommendation} detail={product.trendStatus} />
+          <MetricCard label="Content" value={strategy.bestContentFormat} detail={strategy.postingDifficulty} />
         </div>
         <ScoreBreakdownGrid product={product} />
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           <DetailBlock title="Product Overview" value={product.notes || `${product.productName} untuk niche ${product.category}.`} />
-          <DetailBlock title="Why Recommended" value={content.whyRecommended} />
-          <DetailBlock title="Target Audience" value={content.targetAudience} />
-          <DetailBlock title="Suggested Hook" value={content.hook} />
-          <DetailBlock title="Suggested Content Angle" value={content.angle} />
-          <DetailBlock title="CTA Recommendation" value={content.cta} />
-          <DetailBlock title="Risk Notes" value={content.riskNotes} warning />
-          <DetailBlock title="Suggested Posting Platform" value={content.postingPlatform} />
-          <DetailBlock title="Suggested Content Format" value={content.format} />
-          <DetailBlock title="Caption Idea" value={content.caption} />
-          <DetailBlock title="Hashtag" value={content.hashtag} />
-          <DetailBlock title="Suggested Video Style" value={content.style} />
+          <DetailBlock title="Why Recommended" value={product.recommendedAction} />
+          <DetailBlock title="Recommended Content Format" value={strategy.bestContentFormat} />
+          <DetailBlock title="Best Angle" value={strategy.contentAngle} />
+          <DetailListBlock title="3 Hook Ideas" items={strategy.hookIdeas} />
+          <DetailBlock title="CTA" value={strategy.CTA} />
+          <DetailBlock title="Platform Recommendation" value={strategy.platformRecommendation} />
+          <DetailBlock title="Posting Difficulty" value={strategy.postingDifficulty} />
+          <DetailBlock title="Testing Plan" value={strategy.testingPlan} warning={product.opportunityLevel === "MONITOR ONLY"} />
+          <ShortScriptBlock script={strategy.shortScript} />
+          <DetailBlock title="Caption" value={strategy.caption} />
+          <DetailBlock title="Hashtag Set" value={strategy.hashtagSet.join(" ")} />
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
           <button type="button" onClick={() => onCampaign(product)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-white"><PackageSearch className="h-4 w-4" />Create Campaign</button>
@@ -484,7 +491,8 @@ function toProductView(product: AffiliateProductInsightDto): ProductView {
   const contentDifficulty = score.contentEaseScore >= 76 ? "Easy" : score.contentEaseScore >= 55 ? "Medium" : "Hard";
   const opportunityLevel = score.opportunityLabel;
   const trendStatus = score.trendScore >= 74 ? "Rising" : score.trendScore >= 56 ? "Stable" : "Monitor";
-  return { ...product, opportunityScore: affiliateOpportunityScore, scoreBreakdown: score, affiliateOpportunityScore, estimatedDemand, marginPotential, viralPotential, trustPotential, contentDifficulty, opportunityLevel, trendStatus, dataStatus: dataStatus(product), recommendedAction: productOpportunityInsight(product, score), contentRecommendation: productContentRecommendation(product, score) };
+  const contentStrategy = product.contentStrategy ?? generateProductContentStrategy(product, score);
+  return { ...product, opportunityScore: affiliateOpportunityScore, scoreBreakdown: score, affiliateOpportunityScore, estimatedDemand, marginPotential, viralPotential, trustPotential, contentDifficulty, opportunityLevel, trendStatus, dataStatus: dataStatus(product), recommendedAction: productOpportunityInsight(product, score), contentRecommendation: contentStrategy.bestContentFormat, contentStrategy };
 }
 
 function filterAndSortProducts(products: ProductView[], filter: { platform: string; category: string; opportunityLevel: OpportunityLevel; competition: string; marginPotential: MarginFilter; trendStatus: TrendFilter; sortBy: SortOption; query: string }) {
@@ -506,7 +514,7 @@ function buildCategoryRows(products: ProductView[], sourceView: ProductSourceVie
     const best = [...rows].sort((a, b) => b.affiliateOpportunityScore - a.affiliateOpportunityScore)[0];
     const rowSources = [...new Set(rows.map((product) => product.dataStatus))];
     const sourceType: CategorySourceStatus = sourceView === "ALL" ? rowSources.length > 1 ? "MIXED" : rowSources[0] ?? "EMPTY" : rows.length ? sourceView === "ACTIVE" ? best?.dataStatus ?? "EMPTY" : sourceView : "EMPTY";
-    return { category, sourceType, count: rows.length, bestPlatform: best?.platform ?? "-", averageScore: average(rows.map((item) => item.affiliateOpportunityScore)), trendStatus: best?.trendStatus ?? "Monitor", contentType: contentTypeForCategory(category) };
+    return { category, sourceType, count: rows.length, bestPlatform: best?.platform ?? "-", averageScore: average(rows.map((item) => item.affiliateOpportunityScore)), trendStatus: best?.trendStatus ?? "Monitor", contentType: best?.contentStrategy.bestContentFormat ?? contentTypeForCategory(category) };
   });
 }
 
@@ -527,26 +535,14 @@ function sourceStatusMessage(sourceTypeValue: ProductSourceType) {
   return "Data berasal dari input pengguna dan dapat digunakan untuk analisis internal.";
 }
 
-function affiliateContent(product: ProductView) {
-  const style = product.contentRecommendation;
-  return {
-    whyRecommended: `${product.estimatedDemand} demand, ${product.marginPotential} margin, ${product.viralPotential} trend, ${product.trustPotential} trust, dan score ${product.affiliateOpportunityScore}/100.`,
-    targetAudience: targetAudience(product.category),
-    hook: `Aku test ${product.productName}, ternyata ini yang bikin ${product.category} lebih praktis.`,
-    angle: product.contentRecommendation,
-    caption: `${product.productName} cocok buat yang butuh solusi praktis di kategori ${product.category}. Simpan dulu sebelum checkout.`,
-    cta: product.opportunityLevel === "HIGH OPPORTUNITY" ? "Cek link produk dan bandingkan promo hari ini." : "Simpan dulu, cek review, lalu putuskan saat promo aktif.",
-    hashtag: `#affiliateindonesia #${slug(product.category)} #${slug(product.platform)} #reviewproduk`,
-    riskNotes: product.opportunityLevel === "MONITOR ONLY" ? "Competition tinggi atau sinyal score belum kuat. Validasi review, policy, dan klaim produk sebelum dipublish." : "Tetap validasi stok, komisi, klaim produk, dan kebijakan platform sebelum upload.",
-    postingPlatform: product.platform === "TikTok Shop" ? "TikTok Shop + TikTok short video" : "TikTok, Instagram Reels, dan marketplace video review",
-    format: product.contentDifficulty === "Easy" ? "30-45 detik review natural dengan demo penggunaan" : "45-60 detik problem-solution dengan bukti visual",
-    style
-  };
-}
-
 function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"><p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">{label}</p><p className="mt-2 text-xl font-bold text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }
 function MiniMetric({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-2"><p className="text-[9px] uppercase tracking-wide text-slate-600">{label}</p><p className={`mt-1 font-semibold ${strong ? "text-cyan-100" : "text-slate-200"}`}>{value}</p></div>; }
 function DetailBlock({ title, value, warning = false }: { title: string; value: string; warning?: boolean }) { return <div className={`rounded-xl border p-4 ${warning ? "border-amber-300/20 bg-amber-300/[0.06]" : "border-white/[0.07] bg-white/[0.025]"}`}><h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-200">{value}</p></div>; }
+function DetailListBlock({ title, items }: { title: string; items: readonly string[] }) { return <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"><h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</h3><div className="mt-3 space-y-2">{items.map((item, index) => <p key={item} className="text-sm leading-6 text-slate-200"><span className="mr-2 text-cyan-100">{index + 1}.</span>{item}</p>)}</div></div>; }
+function ShortScriptBlock({ script }: { script: ProductContentStrategy["shortScript"] }) {
+  const rows = [["Opening Hook", script.openingHook], ["Problem", script.problem], ["Product Solution", script.productSolution], ["Proof / Benefit", script.proofOrBenefit], ["CTA", script.CTA]] as const;
+  return <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"><h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Short Script</h3><div className="mt-3 space-y-2">{rows.map(([label, value]) => <div key={label}><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{label}</p><p className="mt-1 text-sm leading-6 text-slate-200">{value}</p></div>)}</div></div>;
+}
 function Select({ label, value, options, icon, onChange }: { label: string; value: string; options: readonly string[]; icon?: React.ReactNode; onChange: (value: string) => void }) { return <label className="relative"><Label>{label}</Label>{icon ? <span className="pointer-events-none absolute left-3 top-[calc(50%+10px)] -translate-y-1/2 text-slate-600">{icon}</span> : null}<select value={value} onChange={(event) => onChange(event.target.value)} className={`premium-input mt-1.5 py-2.5 text-sm ${icon ? "px-10" : "px-3"}`}>{options.map((option) => <option key={option}>{option}</option>)}</select></label>; }
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label><Label>{label}</Label><input value={value} onChange={(event) => onChange(event.target.value)} className="premium-input mt-1.5 px-3 py-2.5 text-sm" /></label>; }
 function Label({ children }: { children: React.ReactNode }) { return <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">{children}</span>; }
@@ -589,9 +585,7 @@ function downloadCsvTemplate() {
 function level(value: number): "High" | "Medium" | "Low" { return value >= 72 ? "High" : value >= 52 ? "Medium" : "Low"; }
 function sortValue(product: ProductView, sortBy: SortOption) { const score = product.scoreBreakdown ?? calculateAffiliateProductScore(product); if (sortBy === "Highest Demand") return score.demandScore; if (sortBy === "Lowest Competition") return score.competitionScore; if (sortBy === "Highest Margin") return score.marginScore; if (sortBy === "Viral Potential") return score.trendScore; return score.finalOpportunityScore; }
 function average(values: number[]) { const valid = values.filter((value) => Number.isFinite(value)); return valid.length ? Math.round(valid.reduce((total, value) => total + value, 0) / valid.length) : 0; }
-function contentTypeForCategory(category: string) { const value = category.toLowerCase(); if (/fashion muslim/.test(value)) return "Islamic soft selling"; if (/beauty/.test(value)) return "Before-after"; if (/mom|baby|home|kitchen/.test(value)) return "Problem solution demo"; if (/food|snack/.test(value)) return "UGC style"; if (/digital|accessories/.test(value)) return "Comparison video"; return "Review natural"; }
-function targetAudience(category: string) { const value = category.toLowerCase(); if (/mom|baby/.test(value)) return "Ibu muda, keluarga muda, dan pembeli kebutuhan anak."; if (/fashion muslim/.test(value)) return "Muslimah aktif yang mencari produk rapi, nyaman, dan sopan."; if (/health/.test(value)) return "Audience yang ingin rutinitas hidup lebih sehat dan praktis."; if (/digital/.test(value)) return "Creator, pekerja mobile, dan pengguna gadget harian."; return "Pembeli pemula yang mencari produk praktis dengan value jelas."; }
+function contentTypeForCategory(category: string): ProductContentFormat { const value = category.toLowerCase(); if (/fashion muslim|muslim/.test(value)) return "Islamic soft selling"; if (/beauty/.test(value)) return "Beauty transformation"; if (/mom|baby/.test(value)) return "Mom solution"; if (/home|kitchen/.test(value)) return "Home improvement"; if (/digital|education|course|ai/.test(value)) return "Educational soft selling"; if (/food|snack/.test(value)) return "UGC style"; return "Review natural"; }
 function opportunityReason(product: ProductView) { return `Final Opportunity Score ${product.affiliateOpportunityScore}/100: demand ${product.estimatedDemand}, margin ${product.marginPotential}, trend ${product.viralPotential}, trust ${product.trustPotential}, competition ${product.competitionLevel}. ${product.recommendedAction}`; }
 function productSeed(product: ProductView): CampaignProductSeed { return { ...product, productId: product.id, dataMode: product.dataMode, missingProductFields: product.missingFields }; }
 function savedKey(title: string, source: string) { return `${title}|${source}`.toLowerCase(); }
-function slug(value: string) { return value.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "").slice(0, 32); }

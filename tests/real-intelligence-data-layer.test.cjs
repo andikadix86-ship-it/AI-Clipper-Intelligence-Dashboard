@@ -10,6 +10,7 @@ const { aggregateTrendSignals } = require("../lib/intelligence/data-layer/aggreg
 const { generateAffiliateOpportunities, generateContentOpportunities } = require("../lib/intelligence/data-layer/opportunities.ts");
 const { saveKnowledge, searchKnowledge } = require("../lib/knowledge-base/repository.ts");
 const { calculateAffiliateProductScore } = require("../lib/affiliate/product-scoring.ts");
+const { generateProductContentStrategy } = require("../lib/affiliate/product-content-strategy.ts");
 
 const input = { niche: "creator economy", platform: "tiktok", keyword: "AI content workflow" };
 const noDatabase = { disableDatabase: true, disableLocalJson: true };
@@ -175,4 +176,86 @@ test("MANUAL product scoring works without rating and review fields", () => {
   assert.ok(score.trustScore >= 68);
   assert.ok(score.finalOpportunityScore >= 60);
   assert.equal(score.opportunityLabel, "MEDIUM OPPORTUNITY");
+});
+
+test("Product content strategy uses Islamic soft selling for Fashion Muslim", () => {
+  const strategy = generateProductContentStrategy({
+    productName: "Inner Cooling Essential",
+    platform: "Shopee",
+    category: "Fashion Muslim",
+    salesVolume: 900,
+    commissionRate: 12,
+    competitionLevel: "Medium",
+    trendScore: 76,
+    contentPotentialScore: 82,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.equal(strategy.bestContentFormat, "Islamic soft selling");
+  assert.match(strategy.contentAngle, /santun|muslimah/i);
+  assert.equal(strategy.hookIdeas.length, 3);
+});
+
+test("Product content strategy uses transformation format for Beauty products", () => {
+  const strategy = generateProductContentStrategy({
+    productName: "Serum Barrier Repair",
+    platform: "TikTok Shop",
+    category: "Beauty & Personal Care",
+    salesVolume: 1500,
+    commissionRate: 14,
+    competitionLevel: "Medium",
+    trendScore: 82,
+    contentPotentialScore: 78,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.ok(["Before-after", "Beauty transformation"].includes(strategy.bestContentFormat));
+  assert.match(strategy.contentAngle, /visual|before|sesudah/i);
+});
+
+test("Product content strategy recommends comparison and unique angle for high competition", () => {
+  const strategy = generateProductContentStrategy({
+    productName: "Creator Desk Lamp",
+    platform: "Tokopedia",
+    category: "Creator Tools",
+    salesVolume: 650,
+    commissionRate: 10,
+    competitionLevel: "High",
+    trendScore: 68,
+    contentPotentialScore: 70,
+    sourceType: "MANUAL"
+  });
+  assert.equal(strategy.bestContentFormat, "Comparison video");
+  assert.match(strategy.contentAngle, /Angle unik|bandingkan/i);
+});
+
+test("Product content strategy uses light testing plan for low opportunity products", () => {
+  const strategy = generateProductContentStrategy({
+    productName: "Weak Signal Product",
+    platform: "Lazada",
+    category: "Digital Accessories",
+    salesVolume: 1,
+    commissionRate: 4,
+    competitionLevel: "High",
+    trendScore: 25,
+    contentPotentialScore: 38,
+    rating: 3.2,
+    reviewCount: 2,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.match(strategy.testingPlan, /Testing ringan|jangan scale/i);
+});
+
+test("Product content strategy uses yellow basket CTA for TikTok Shop", () => {
+  const strategy = generateProductContentStrategy({
+    productName: "Portable Blender Pro",
+    platform: "TikTok Shop",
+    category: "Kitchen Tools",
+    salesVolume: 1800,
+    commissionRate: 12,
+    competitionLevel: "Medium",
+    trendScore: 80,
+    contentPotentialScore: 82,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.match(strategy.CTA, /keranjang kuning/i);
+  assert.match(strategy.platformRecommendation, /TikTok/i);
 });
