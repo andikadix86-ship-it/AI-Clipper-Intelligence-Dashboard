@@ -7,6 +7,7 @@ import { serverLogger } from "@/lib/server-logger";
 import type { AffiliateProductInsightDto, ProductOpportunityScore } from "@/lib/intelligence/types";
 import { affiliateCategories, affiliateSources, allCategoriesLabel, asAffiliateSource, getCategoriesForSource, sourceCategoryMap } from "@/lib/affiliate/product-intelligence-catalog";
 import type { AffiliateCategory, AffiliateSource } from "@/lib/affiliate/product-intelligence-catalog";
+import { calculateAffiliateProductScore } from "@/lib/affiliate/product-scoring";
 
 export type ProductSourceType = "DEMO" | "CACHE" | "REAL" | "REAL_USER_INPUT";
 export type ProductSourceMode = "DEMO" | "CACHE" | "REAL" | "REAL_USER_INPUT";
@@ -99,13 +100,13 @@ export class ProductIntelligenceEngine {
   scoreProduct(product: Pick<ProductSeed, "productName" | "platform" | "category" | "commissionRate" | "price" | "salesVolume" | "revenue" | "trendScore" | "opportunityScore">): ProductOpportunityScore | null {
     if (missingProductFields(product).length) return null;
     const hash = createHash("sha256").update(`${product.productName}|${product.platform}|${product.category}`).digest();
-    const demand = bounded(Math.min(100, 35 + (product.salesVolume ?? 0) / 18));
-    const trend = bounded(product.trendScore ?? (product.revenue ? Math.min(100, 48 + product.revenue / 1_000_000) : 55 + hash[3] % 43));
-    const commission = bounded(product.commissionRate * 5);
-    const contentPotential = bounded(62 + hash[2] % 35);
-    const competition = bounded(35 + hash[1] % 56);
-    const opportunity = bounded(product.opportunityScore ?? Math.round((demand * 0.25) + (trend * 0.20) + (commission * 0.20) + (contentPotential * 0.25) + ((100 - competition) * 0.10)));
-    return { demand, competition, commission, contentPotential, trend, opportunity };
+    const score = calculateAffiliateProductScore({
+      ...product,
+      trendScore: product.trendScore ?? (product.revenue ? Math.min(100, 48 + product.revenue / 1_000_000) : 55 + hash[3] % 43),
+      contentPotentialScore: 62 + hash[2] % 35,
+      policySafetyScore: 62
+    });
+    return { ...score, opportunity: product.opportunityScore ? bounded(product.opportunityScore) : score.opportunity };
   }
 
   async saveToCache(seed: ProductSeed) {

@@ -4,7 +4,6 @@ import { ModuleGrid } from "@/components/centers/center-ui";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { PageHeader, StatCard } from "@/components/studio-ui";
 import { AffiliateEnginePanel } from "@/components/centers/affiliate-engine-panel";
-import { ProductOpportunityCards } from "@/components/affiliate/product-opportunity-cards";
 import { ProductIntelligenceCenter } from "@/components/affiliate/product-intelligence-center";
 import { AffiliateAccountsPanel, AffiliateAnalyticsPanel, AffiliateDownstreamPanel, AffiliateSchedulerPanel, CampaignManagerPanel } from "@/components/affiliate/affiliate-workflow-panels";
 
@@ -31,8 +30,9 @@ export function AffiliateCenterWorkspace() {
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Affiliate Marketing OS" title="Affiliate Center" subtitle="Find profitable products, target multiple affiliate accounts, and run campaigns from intelligence to analytics." description="Supabase-backed product intelligence, multi-account campaign planning, content production, publishing, and affiliate analytics." action={{ label: "Explore Product Hunter", href: "/winning-products" }} />
-      <ProductOpportunityCards />
-      <ProductOpportunityCards shortlistOnly />
+      <section id="product-intelligence-center" className="scroll-mt-6">
+        <ProductIntelligenceCenter />
+      </section>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Products Scanned" value="70+" detail="Supabase intelligence catalog" />
         <StatCard label="Sources" value="07" detail="Marketplace and custom affiliate" />
@@ -41,9 +41,6 @@ export function AffiliateCenterWorkspace() {
         <StatCard label="Workflow" value="07" detail="Discovery to analytics" />
       </div>
       <QuickActionsPanel />
-      <section id="product-intelligence-center" className="scroll-mt-6">
-        <ProductIntelligenceCenter />
-      </section>
       <AffiliateAccountsPanel />
       <section id="campaign-manager" className="scroll-mt-6">
         <CampaignManagerPanel />

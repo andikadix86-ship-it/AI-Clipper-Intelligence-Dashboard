@@ -5,10 +5,10 @@ export type AffiliateCategory = string;
 export const allCategoriesLabel = "All Categories";
 
 export const sourceCategoryMap: Record<AffiliateSource, readonly string[]> = {
-  "TikTok Shop": ["Beauty & Personal Care", "Women's Fashion", "Men's Fashion", "Home & Living", "Electronics", "Health", "Food & Beverage", "Baby & Kids"],
-  Shopee: ["Kecantikan", "Elektronik", "Fashion", "Rumah Tangga", "Ibu & Bayi", "Makanan & Minuman"],
-  Tokopedia: ["Kecantikan", "Elektronik", "Fashion", "Rumah Tangga", "Ibu & Bayi", "Makanan & Minuman", "Software"],
-  Lazada: ["Beauty", "Electronics", "Fashion", "Home & Living", "Mother & Baby", "Groceries"],
+  "TikTok Shop": ["Beauty & Personal Care", "Mom & Baby", "Home Living", "Kitchen Tools", "Fashion Muslim", "Health Lifestyle", "Digital Accessories", "Food & Snack"],
+  Shopee: ["Beauty & Personal Care", "Mom & Baby", "Home Living", "Kitchen Tools", "Fashion Muslim", "Health Lifestyle", "Digital Accessories", "Food & Snack"],
+  Tokopedia: ["Beauty & Personal Care", "Mom & Baby", "Home Living", "Kitchen Tools", "Fashion Muslim", "Health Lifestyle", "Digital Accessories", "Food & Snack"],
+  Lazada: ["Beauty & Personal Care", "Mom & Baby", "Home Living", "Kitchen Tools", "Fashion Muslim", "Health Lifestyle", "Digital Accessories", "Food & Snack"],
   Facebook: ["Local Services", "Home Products", "Fashion", "Digital Product", "Community Offers", "Automotive"],
   Instagram: ["Beauty", "Fashion", "Home Decor", "Digital Product", "Food & Beverage", "Creator Tools"],
   "Custom Affiliate": ["AI Tools", "SaaS", "Hosting", "VPN", "Course", "Membership", "Software", "Automation"]
