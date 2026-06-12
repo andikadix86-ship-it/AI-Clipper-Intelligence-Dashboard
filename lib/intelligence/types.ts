@@ -54,6 +54,7 @@ export type AffiliateProductInsightDto = {
   opportunityScore?: number;
   scoreBreakdown?: ProductOpportunityScore;
   contentStrategy?: ProductContentStrategy;
+  campaignPlan?: ProductCampaignPlan;
   isEstimated?: boolean;
   lastSyncedAt?: string;
 };
@@ -88,6 +89,29 @@ export type ProductContentStrategy = {
   platformRecommendation: string;
   postingDifficulty: "Easy" | "Medium" | "Hard";
   testingPlan: string;
+};
+
+export type ProductCampaignDailyPlan = {
+  day: number;
+  stage: string;
+  contentFormat: ProductContentFormat;
+  hook: string;
+  angle: string;
+  shortScript: ProductContentStrategy["shortScript"];
+  CTA: string;
+  caption: string;
+  hashtags: string[];
+  platformFocus: string;
+};
+
+export type ProductCampaignPlan = {
+  campaignDurationDays: number;
+  campaignGoal: string;
+  campaignTheme: string;
+  dailyPlan: ProductCampaignDailyPlan[];
+  recommendedPostingFrequency: string;
+  successMetrics: string[];
+  riskNotes: string[];
 };
 
 export type ProductOpportunityScore = {

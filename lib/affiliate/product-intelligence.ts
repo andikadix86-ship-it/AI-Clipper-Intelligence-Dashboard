@@ -6,6 +6,7 @@ import { serverLogger } from "@/lib/server-logger";
 import type { AffiliateProductInsightDto, ProductOpportunityScore } from "@/lib/intelligence/types";
 import { affiliateCategories, affiliateSources, allCategoriesLabel, asAffiliateSource, getCategoriesForSource, sourceCategoryMap } from "@/lib/affiliate/product-intelligence-catalog";
 import type { AffiliateCategory, AffiliateSource } from "@/lib/affiliate/product-intelligence-catalog";
+import { generateProductCampaignPlan } from "@/lib/affiliate/product-campaign-planner";
 import { generateProductContentStrategy } from "@/lib/affiliate/product-content-strategy";
 import { calculateAffiliateProductScore } from "@/lib/affiliate/product-scoring";
 
@@ -416,6 +417,7 @@ function categoryProducts(category: string) {
 function insightData(seed: ProductSeed, score: ProductOpportunityScore) {
   const missingFields = missingProductFields(seed);
   const contentStrategy = generateProductContentStrategy(seed, score);
+  const campaignPlan = generateProductCampaignPlan(seed, score, contentStrategy);
   return {
     productName: seed.productName,
     platform: seed.platform,
@@ -444,14 +446,14 @@ function insightData(seed: ProductSeed, score: ProductOpportunityScore) {
     collectedAt: new Date(),
     isDemo: seed.sourceType === "DEMO",
     notes: seed.notes ?? "Imported affiliate program candidate. Review offer details before campaign activation.",
-    rawData: { scoreBreakdown: score, contentStrategy, sourceType: seed.sourceType, dataMode: dataMode(seed.sourceType), missingFields, isEstimated: false, ...seed.rawData } as Prisma.InputJsonValue
+    rawData: { ...seed.rawData, scoreBreakdown: score, contentStrategy, campaignPlan, sourceType: seed.sourceType, dataMode: dataMode(seed.sourceType), missingFields, isEstimated: false } as Prisma.InputJsonValue
   };
 }
 
 function toDto(product: {
   id: string; productName: string; platform: string; category: string; sourceType?: string; productUrl?: string | null; affiliateUrl?: string | null; price?: number | null; commissionRate?: number | null; revenue?: number | null; salesVolume?: number | null; demandScore?: number | null; trendScore: number; competitionLevel: string; competitionScore?: number | null; commissionEstimate: string; commissionScore?: number | null; priceRange: string; contentPotentialScore: number; opportunityScore?: number | null; isEstimated?: boolean | null; lastSyncedAt?: Date | null; source: string; sourceUrl: string | null; confidence: number; collectedAt: Date; isDemo: boolean; notes: string; rawData: unknown;
 }): AffiliateProductInsightDto {
-  const rawData = product.rawData as { scoreBreakdown?: Partial<ProductOpportunityScore> | null; contentStrategy?: AffiliateProductInsightDto["contentStrategy"]; sourceType?: ProductSourceType; isEstimated?: boolean; missingFields?: string[]; dataMode?: AffiliateProductInsightDto["dataMode"]; rating?: number; reviewCount?: number } | null;
+  const rawData = product.rawData as { scoreBreakdown?: Partial<ProductOpportunityScore> | null; contentStrategy?: AffiliateProductInsightDto["contentStrategy"]; campaignPlan?: AffiliateProductInsightDto["campaignPlan"]; sourceType?: ProductSourceType; isEstimated?: boolean; missingFields?: string[]; dataMode?: AffiliateProductInsightDto["dataMode"]; rating?: number; reviewCount?: number } | null;
   const sourceType = asSourceType(product.sourceType ?? rawData?.sourceType ?? "DEMO");
   const score = calculateAffiliateProductScore({
     productName: product.productName,
@@ -472,7 +474,7 @@ function toDto(product: {
     rawData
   });
   const missingFields = rawData?.missingFields ?? requiredMissing({ price: product.price ?? undefined, commissionRate: product.commissionRate ?? undefined, salesVolume: product.salesVolume ?? undefined, trendScore: product.trendScore, opportunityScore: product.opportunityScore ?? undefined });
-  const contentStrategy = generateProductContentStrategy({
+  const generatedContentStrategy = generateProductContentStrategy({
     productName: product.productName,
     platform: asSource(product.platform),
     category: product.category,
@@ -491,6 +493,26 @@ function toDto(product: {
     notes: product.notes,
     rawData
   }, score);
+  const contentStrategy = rawData?.contentStrategy ?? generatedContentStrategy;
+  const campaignPlan = generateProductCampaignPlan({
+    productName: product.productName,
+    platform: asSource(product.platform),
+    category: product.category,
+    price: product.price ?? undefined,
+    commissionRate: product.commissionRate ?? undefined,
+    revenue: product.revenue ?? undefined,
+    salesVolume: product.salesVolume ?? undefined,
+    trendScore: product.trendScore,
+    competitionLevel: asCompetition(product.competitionLevel),
+    contentPotentialScore: product.contentPotentialScore,
+    opportunityScore: score.finalOpportunityScore,
+    sourceType,
+    confidence: product.confidence,
+    rating: rawData?.rating,
+    reviewCount: rawData?.reviewCount,
+    notes: product.notes,
+    rawData
+  }, score, contentStrategy);
   return {
     ...product,
     platform: asSource(product.platform),
@@ -510,7 +532,8 @@ function toDto(product: {
     isEstimated: product.isEstimated ?? rawData?.isEstimated ?? false,
     opportunityScore: score.finalOpportunityScore,
     scoreBreakdown: score,
-    contentStrategy: rawData?.contentStrategy ?? contentStrategy
+    contentStrategy,
+    campaignPlan: rawData?.campaignPlan ?? campaignPlan
   };
 }
 

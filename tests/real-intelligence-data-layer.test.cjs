@@ -11,6 +11,7 @@ const { generateAffiliateOpportunities, generateContentOpportunities } = require
 const { saveKnowledge, searchKnowledge } = require("../lib/knowledge-base/repository.ts");
 const { calculateAffiliateProductScore } = require("../lib/affiliate/product-scoring.ts");
 const { generateProductContentStrategy } = require("../lib/affiliate/product-content-strategy.ts");
+const { generateProductCampaignPlan } = require("../lib/affiliate/product-campaign-planner.ts");
 
 const input = { niche: "creator economy", platform: "tiktok", keyword: "AI content workflow" };
 const noDatabase = { disableDatabase: true, disableLocalJson: true };
@@ -258,4 +259,88 @@ test("Product content strategy uses yellow basket CTA for TikTok Shop", () => {
   });
   assert.match(strategy.CTA, /keranjang kuning/i);
   assert.match(strategy.platformRecommendation, /TikTok/i);
+});
+
+test("Product campaign planner creates 7-day campaign for high opportunity products", () => {
+  const plan = generateProductCampaignPlan({
+    productName: "High Signal Product",
+    platform: "Shopee",
+    category: "Kitchen Tools",
+    salesVolume: 4200,
+    commissionRate: 20,
+    competitionLevel: "Low",
+    trendScore: 86,
+    contentPotentialScore: 84,
+    rating: 4.8,
+    reviewCount: 680,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.equal(plan.campaignDurationDays, 7);
+  assert.ok(plan.dailyPlan.length >= 7);
+  assert.match(plan.recommendedPostingFrequency, /1-2x per hari/i);
+});
+
+test("Product campaign planner creates monitor/light test plan for monitor-only products", () => {
+  const plan = generateProductCampaignPlan({
+    productName: "Weak Signal Product",
+    platform: "Lazada",
+    category: "Digital Accessories",
+    salesVolume: 1,
+    commissionRate: 4,
+    competitionLevel: "High",
+    trendScore: 25,
+    contentPotentialScore: 38,
+    rating: 3.2,
+    reviewCount: 2,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.ok(plan.campaignDurationDays <= 3);
+  assert.match(`${plan.campaignGoal} ${plan.recommendedPostingFrequency} ${plan.riskNotes.join(" ")}`, /monitor|jangan scale|1-3 konten/i);
+});
+
+test("Product campaign planner uses Islamic soft selling for Fashion Muslim campaign", () => {
+  const plan = generateProductCampaignPlan({
+    productName: "Inner Cooling Essential",
+    platform: "Shopee",
+    category: "Fashion Muslim",
+    salesVolume: 900,
+    commissionRate: 12,
+    competitionLevel: "Medium",
+    trendScore: 76,
+    contentPotentialScore: 82,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.match(plan.campaignTheme, /Islamic soft selling|modest|comfort|trust/i);
+  assert.ok(plan.dailyPlan.every((day) => day.contentFormat === "Islamic soft selling"));
+});
+
+test("Product campaign planner uses before-after or transformation for Beauty campaign", () => {
+  const plan = generateProductCampaignPlan({
+    productName: "Serum Barrier Repair",
+    platform: "TikTok Shop",
+    category: "Beauty & Personal Care",
+    salesVolume: 1500,
+    commissionRate: 14,
+    competitionLevel: "Medium",
+    trendScore: 82,
+    contentPotentialScore: 78,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.match(plan.campaignTheme, /before-after|transformation/i);
+  assert.ok(plan.dailyPlan.some((day) => ["Before-after", "Beauty transformation"].includes(day.contentFormat)));
+});
+
+test("Product campaign planner uses yellow basket CTA for TikTok Shop", () => {
+  const plan = generateProductCampaignPlan({
+    productName: "Portable Blender Pro",
+    platform: "TikTok Shop",
+    category: "Kitchen Tools",
+    salesVolume: 1800,
+    commissionRate: 12,
+    competitionLevel: "Medium",
+    trendScore: 80,
+    contentPotentialScore: 82,
+    sourceType: "CSV_IMPORT"
+  });
+  assert.ok(plan.dailyPlan.every((day) => /keranjang kuning/i.test(day.CTA)));
 });

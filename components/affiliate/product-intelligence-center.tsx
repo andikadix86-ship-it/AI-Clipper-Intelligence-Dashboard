@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CampaignCreationModal, type CampaignProductSeed } from "@/components/affiliate/campaign-creation-modal";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
+import { generateProductCampaignPlan } from "@/lib/affiliate/product-campaign-planner";
 import { generateProductContentStrategy } from "@/lib/affiliate/product-content-strategy";
 import { calculateAffiliateProductScore, productOpportunityInsight, type OpportunityLabel } from "@/lib/affiliate/product-scoring";
 import { allCategoriesLabel, sourceCategoryMap } from "@/lib/affiliate/product-intelligence-catalog";
 import { persistOpportunity } from "@/lib/intelligence/affiliate-persistence";
-import type { AffiliateProductInsightDto, ProductContentFormat, ProductContentStrategy } from "@/lib/intelligence/types";
+import type { AffiliateProductInsightDto, ProductCampaignPlan, ProductContentFormat, ProductContentStrategy } from "@/lib/intelligence/types";
 
 type MarketplacePlatform = "Shopee" | "TikTok Shop" | "Tokopedia" | "Lazada";
 type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
@@ -33,6 +34,7 @@ type ProductView = AffiliateProductInsightDto & {
   recommendedAction: string;
   contentRecommendation: ProductContentFormat;
   contentStrategy: ProductContentStrategy;
+  campaignPlan: ProductCampaignPlan;
   dataStatus: DataStatus;
   trendStatus: Exclude<TrendFilter, "All Trends">;
 };
@@ -319,9 +321,14 @@ function Shortlist({ products, savedKeys, saving, onSelect, onSave, onCampaign }
               <p className="mt-2 text-[9px] font-semibold uppercase tracking-wide text-slate-500">Best Angle</p>
               <p className="mt-1 text-[11px] leading-4 text-slate-300">{product.contentStrategy.contentAngle}</p>
             </div>
+            <div className="mt-3 rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">Campaign Plan</p>
+              <p className="mt-1 text-[11px] font-semibold text-slate-200">{product.campaignPlan.campaignDurationDays} days / {product.campaignPlan.recommendedPostingFrequency}</p>
+            </div>
             <div className="mt-auto flex flex-wrap gap-2 pt-4">
               <button type="button" onClick={() => onSelect(product)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-2 text-[11px] font-semibold text-slate-200">View Strategy<ChevronRight className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => onSave(product)} disabled={saved || saving === `save-${product.id}`} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-cyan-100 disabled:opacity-60">{saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}{saved ? "Saved" : "Save"}</button>
+              <button type="button" onClick={() => onSelect(product)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-emerald-100">View Campaign Plan<ChevronRight className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => onCampaign(product)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-semibold text-white"><PackageSearch className="h-3.5 w-3.5" />Create Campaign</button>
             </div>
           </article>
@@ -380,6 +387,7 @@ function PlatformProductList({ platform, products, onSelect }: { platform: Marke
 function ProductDetailModal({ product, onClose, onCampaign }: { product?: ProductView; onClose: () => void; onCampaign: (product: ProductView) => void }) {
   if (!product) return null;
   const strategy = product.contentStrategy;
+  const plan = product.campaignPlan;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 p-0 backdrop-blur-sm md:items-center md:p-6">
       <section className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-white/[0.08] bg-slate-950 p-5 shadow-2xl md:max-w-4xl md:rounded-2xl">
@@ -387,10 +395,11 @@ function ProductDetailModal({ product, onClose, onCampaign }: { product?: Produc
           <div><OpportunityBadge level={product.opportunityLevel} /><h2 className="mt-3 text-xl font-semibold text-white">{product.productName}</h2><p className="mt-1 text-sm text-slate-500">{product.platform} / {product.category} / {product.dataStatus}</p></div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300"><X className="h-4 w-4" /></button>
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
           <MetricCard label="Affiliate Score" value={`${product.affiliateOpportunityScore}/100`} detail="Weighted product score" />
           <MetricCard label="Demand" value={product.estimatedDemand} detail={`${product.salesVolume?.toLocaleString("id-ID") ?? "Demo"} signal`} />
           <MetricCard label="Content" value={strategy.bestContentFormat} detail={strategy.postingDifficulty} />
+          <MetricCard label="Campaign" value={`${plan.campaignDurationDays} days`} detail={plan.recommendedPostingFrequency} />
         </div>
         <ScoreBreakdownGrid product={product} />
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
@@ -407,6 +416,7 @@ function ProductDetailModal({ product, onClose, onCampaign }: { product?: Produc
           <DetailBlock title="Caption" value={strategy.caption} />
           <DetailBlock title="Hashtag Set" value={strategy.hashtagSet.join(" ")} />
         </div>
+        <CampaignPlanSection plan={plan} />
         <div className="mt-5 flex flex-wrap gap-2">
           <button type="button" onClick={() => onCampaign(product)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-white"><PackageSearch className="h-4 w-4" />Create Campaign</button>
           {product.sourceUrl ? <a href={product.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300"><ExternalLink className="h-4 w-4" />Open Source</a> : null}
@@ -492,7 +502,8 @@ function toProductView(product: AffiliateProductInsightDto): ProductView {
   const opportunityLevel = score.opportunityLabel;
   const trendStatus = score.trendScore >= 74 ? "Rising" : score.trendScore >= 56 ? "Stable" : "Monitor";
   const contentStrategy = product.contentStrategy ?? generateProductContentStrategy(product, score);
-  return { ...product, opportunityScore: affiliateOpportunityScore, scoreBreakdown: score, affiliateOpportunityScore, estimatedDemand, marginPotential, viralPotential, trustPotential, contentDifficulty, opportunityLevel, trendStatus, dataStatus: dataStatus(product), recommendedAction: productOpportunityInsight(product, score), contentRecommendation: contentStrategy.bestContentFormat, contentStrategy };
+  const campaignPlan = product.campaignPlan ?? generateProductCampaignPlan(product, score, contentStrategy);
+  return { ...product, opportunityScore: affiliateOpportunityScore, scoreBreakdown: score, affiliateOpportunityScore, estimatedDemand, marginPotential, viralPotential, trustPotential, contentDifficulty, opportunityLevel, trendStatus, dataStatus: dataStatus(product), recommendedAction: productOpportunityInsight(product, score), contentRecommendation: contentStrategy.bestContentFormat, contentStrategy, campaignPlan };
 }
 
 function filterAndSortProducts(products: ProductView[], filter: { platform: string; category: string; opportunityLevel: OpportunityLevel; competition: string; marginPotential: MarginFilter; trendStatus: TrendFilter; sortBy: SortOption; query: string }) {
@@ -533,6 +544,48 @@ function sourceStatusMessage(sourceTypeValue: ProductSourceType) {
   if (sourceTypeValue === "DEMO") return "Data ini hanya contoh demo, belum valid untuk keputusan affiliate.";
   if (sourceTypeValue === "REAL_API") return "Data berasal dari integrasi API marketplace.";
   return "Data berasal dari input pengguna dan dapat digunakan untuk analisis internal.";
+}
+
+function CampaignPlanSection({ plan }: { plan: ProductCampaignPlan }) {
+  return (
+    <section className="mt-5 rounded-xl border border-emerald-300/10 bg-emerald-300/[0.025] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-white">View Campaign Plan</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-400">{plan.campaignTheme}</p>
+        </div>
+        <Badge>{plan.campaignDurationDays} days</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <DetailBlock title="Campaign Goal" value={plan.campaignGoal} />
+        <DetailBlock title="Recommended Posting Frequency" value={plan.recommendedPostingFrequency} />
+        <DetailListBlock title="Success Metrics" items={plan.successMetrics} />
+        <DetailListBlock title="Risk Notes" items={plan.riskNotes} />
+      </div>
+      <div className="mt-4 space-y-3">
+        {plan.dailyPlan.map((day) => (
+          <article key={day.day} className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">Day {day.day}</p>
+                <h4 className="mt-1 text-sm font-semibold text-white">{day.stage}</h4>
+              </div>
+              <Badge>{day.contentFormat}</Badge>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <DetailBlock title="Hook" value={day.hook} />
+              <DetailBlock title="Angle" value={day.angle} />
+              <DetailBlock title="CTA" value={day.CTA} />
+              <DetailBlock title="Caption" value={day.caption} />
+              <DetailBlock title="Platform Focus" value={day.platformFocus} />
+              <DetailBlock title="Hashtags" value={day.hashtags.join(" ")} />
+              <ShortScriptBlock script={day.shortScript} />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4"><p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">{label}</p><p className="mt-2 text-xl font-bold text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }

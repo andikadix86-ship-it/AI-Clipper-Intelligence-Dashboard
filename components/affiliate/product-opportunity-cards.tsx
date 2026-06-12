@@ -4,6 +4,7 @@ import { BarChart3, Flame, Sparkles, Target, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardPanel } from "@/components/dashboard/ui";
 import { EmptyCard, ErrorCard } from "@/components/state-cards";
+import { generateProductCampaignPlan } from "@/lib/affiliate/product-campaign-planner";
 import { generateProductContentStrategy } from "@/lib/affiliate/product-content-strategy";
 import { calculateAffiliateProductScore, productOpportunityInsight } from "@/lib/affiliate/product-scoring";
 import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
@@ -69,6 +70,7 @@ function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
   const missing = product.missingFields ?? [];
   const productScore = score(product);
   const strategy = product.contentStrategy ?? generateProductContentStrategy(product, productScore);
+  const campaignPlan = product.campaignPlan ?? generateProductCampaignPlan(product, productScore, strategy);
   return (
     <div className="mt-3 space-y-1.5 text-xs text-slate-400">
       <Field label="product_name" value={product.productName} strong />
@@ -84,6 +86,9 @@ function ProductFields({ product }: { product: AffiliateProductInsightDto }) {
       <Field label="content_format" value={strategy.bestContentFormat} />
       <Field label="best_angle" value={strategy.contentAngle} />
       <Field label="cta" value={strategy.CTA} />
+      <Field label="campaign_duration" value={`${campaignPlan.campaignDurationDays} days`} />
+      <Field label="posting_frequency" value={campaignPlan.recommendedPostingFrequency} />
+      <Field label="campaign_cta" value={campaignPlan.dailyPlan[0]?.CTA ?? campaignPlan.campaignGoal} />
       <Field label="source" value={product.source} />
       <Field label="source_type" value={sourceLabel(sourceType(product.sourceType))} />
       <p className="pt-2 text-[11px] leading-5 text-slate-300">{productOpportunityInsight(product, productScore)}</p>
