@@ -394,11 +394,23 @@ function demoSeed(platform: AffiliateSource, category: string, productName: stri
     commissionRate,
     price,
     priceRange: platform === "Custom Affiliate" ? "Rp99.000 - Rp1.999.000" : "Rp49.000 - Rp799.000",
+    productUrl: marketplaceProductUrl(platform, productName),
     revenue,
     salesVolume,
     sourceType: "DEMO",
-    notes: `DEMO starter product intelligence for ${platform} / ${category}. Real API belum dikonfigurasi; validasi data sebelum publishing.`
+    notes: `NOT CONNECTED sample product intelligence for ${platform} / ${category}. Real API belum dikonfigurasi; validasi data sebelum publishing.`
   };
+}
+
+function marketplaceProductUrl(platform: AffiliateSource, productName: string) {
+  const keyword = encodeURIComponent(productName.toLowerCase());
+  if (platform === "Shopee") return `https://shopee.co.id/search?keyword=${keyword}`;
+  if (platform === "TikTok Shop") return `https://www.tiktok.com/shop/search?q=${keyword}`;
+  if (platform === "Tokopedia") return `https://www.tokopedia.com/search?st=product&q=${keyword}`;
+  if (platform === "Lazada") return `https://www.lazada.co.id/catalog/?q=${keyword}`;
+  if (platform === "Facebook") return `https://www.facebook.com/marketplace/search/?query=${keyword}`;
+  if (platform === "Instagram") return `https://www.instagram.com/explore/search/keyword/?q=${keyword}`;
+  return `https://www.google.com/search?q=${keyword}`;
 }
 
 function categoryProducts(category: string) {
@@ -643,4 +655,4 @@ function requiredMissing(product: { price?: number | null; commissionRate?: numb
 }
 function rupiahRange(value: number) { return value > 0 ? rupiah(value) : "Validate from custom program"; }
 function rupiah(value: number) { return `Rp${Math.round(value).toLocaleString("id-ID")}`; }
-function fallbackMessage(configured: boolean) { return configured ? "Product data synced." : "Marketplace API not connected. Showing demo data only."; }
+function fallbackMessage(configured: boolean) { return configured ? "Product data synced." : "Marketplace API not connected. Showing NOT CONNECTED sample data only."; }

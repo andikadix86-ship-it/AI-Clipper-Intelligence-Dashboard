@@ -9,14 +9,14 @@ export const demoTikTokSearchAdapter: IntelligenceSearchAdapter = {
     const platformFitScore = input.mode === "affiliate" ? 84 : 78;
     return {
       status: "DEMO",
-      message: "TikTok masih demo/manual source. Tidak ada scraping atau API call aktif.",
+      message: "TikTok NOT CONNECTED/manual source. Tidak ada scraping atau API call aktif.",
       results: [{
         id: `demo_tiktok_${slug(input.keyword)}`,
         keyword: input.keyword,
         topic: `${input.keyword} short-form angle`,
         title: `${input.keyword} short-form angle`,
         platform: "TIKTOK",
-        source: "TikTok manual demo dataset",
+        source: "tiktok_demo",
         trendScore,
         contentPotentialScore: calculateContentPotential({ trendScore, recencyScore, platformFitScore }),
         competitionScore: 58,
@@ -28,16 +28,15 @@ export const demoTikTokSearchAdapter: IntelligenceSearchAdapter = {
         language: input.language ?? "id",
         rawData: { adapter: "demoTikTokSearchAdapter", basis: "manual sample signal" },
         isDemo: true,
-        notes: "Demo Source. Validate manually in TikTok before production.",
+        notes: "NOT CONNECTED source. Validate manually in TikTok before production.",
         collectedAt
       }]
     };
   },
   async getStatus() { return "DEMO"; },
-  getProviderInfo() { return { name: "TikTok", source: "manual demo dataset", isDemo: true }; }
+  getProviderInfo() { return { name: "TikTok", source: "manual NOT CONNECTED sample dataset", isDemo: true }; }
 };
 
 function slug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 }
-

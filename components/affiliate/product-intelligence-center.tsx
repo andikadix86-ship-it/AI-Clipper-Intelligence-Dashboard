@@ -15,7 +15,7 @@ import type { AffiliateProductInsightDto, ProductCampaignPlan, ProductContentFor
 type MarketplacePlatform = "Shopee" | "TikTok Shop" | "Tokopedia" | "Lazada";
 type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 type ProductSourceView = "ACTIVE" | "ALL" | ProductSourceType;
-type DataStatus = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
+type DataStatus = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API" | "NO DATA";
 type CategorySourceStatus = DataStatus | "MIXED" | "EMPTY";
 type OpportunityLevel = "All Levels" | OpportunityLabel;
 type MarginFilter = "All Margins" | "High Margin" | "Medium Margin" | "Low Margin";
@@ -51,7 +51,7 @@ export function ProductIntelligenceCenter() {
   const [sourceConfig, setSourceConfig] = useState<Record<string, { mode: string; configured: boolean }>>({});
   const [activeSourceType, setActiveSourceType] = useState<ProductSourceType>("DEMO");
   const [sourceView, setSourceView] = useState<ProductSourceView>("ACTIVE");
-  const [marketplaceStatus, setMarketplaceStatus] = useState("Marketplace API not connected. Showing demo data only.");
+  const [marketplaceStatus, setMarketplaceStatus] = useState("Marketplace API not connected. Showing NOT CONNECTED sample data only.");
   const [platform, setPlatform] = useState<string>("All Platforms");
   const [category, setCategory] = useState<string>(allCategoriesLabel);
   const [opportunityLevel, setOpportunityLevel] = useState<OpportunityLevel>("All Levels");
@@ -127,7 +127,7 @@ export function ProductIntelligenceCenter() {
 
   async function saveOpportunity(product: ProductView) {
     setSaving(`save-${product.id}`);
-    const result = await persistOpportunity({ topic: product.productName, type: "affiliate_product", source: product.source, sourceUrl: product.sourceUrl, score: product.affiliateOpportunityScore, confidence: product.confidence, platform: product.platform, reason: opportunityReason(product), notes: product.notes, isDemo: product.isDemo });
+    const result = await persistOpportunity({ topic: product.productName, type: "affiliate_product", source: product.source, sourceUrl: getProductSourceUrl(product), score: product.affiliateOpportunityScore, confidence: product.confidence, platform: product.platform, reason: opportunityReason(product), notes: product.notes, isDemo: product.isDemo });
     setNotice(result.message);
     setSavedKeys((current) => new Set([...current, savedKey(product.productName, product.source)]));
     setSaving("");
@@ -227,7 +227,7 @@ export function ProductIntelligenceCenter() {
 
       <DashboardPanel title="Recommended Product Shortlist" description="Produk terbaik berdasarkan Affiliate Opportunity Score, siap dipakai sebagai starting point campaign affiliate.">
         {notice ? <p className="mb-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] p-3 text-xs leading-5 text-emerald-100">{notice}</p> : null}
-        {hasDemo ? <p className="mb-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-3 text-xs leading-5 text-amber-100">Marketplace API not connected. Showing demo data only.</p> : null}
+        {hasDemo ? <p className="mb-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-3 text-xs leading-5 text-amber-100">Marketplace API not connected. Showing NOT CONNECTED sample data only.</p> : null}
         {error ? <div className="mb-4"><ErrorCard compact title="Product Intelligence unavailable" description={error} /></div> : null}
         {loading ? <ShortlistSkeleton /> : shortlist.length ? <Shortlist products={shortlist} saving={saving} savedKeys={savedKeys} onSelect={setSelectedProduct} onSave={saveOpportunity} onCampaign={(product) => setCampaignSeed(productSeed(product))} /> : <EmptyCard title="No products found" description={productViews.length ? "Belum ada produk yang cocok dengan filter. Reset filter atau ganti source view." : emptyProductMessage} />}
       </DashboardPanel>
@@ -241,7 +241,7 @@ export function ProductIntelligenceCenter() {
           </div>
           <div className="flex flex-wrap gap-2"><DataStatusBadge label={activeSourceType} />{platforms.map((item) => <DataStatusBadge key={item} label={sourceConfig[item]?.configured ? "REAL_API" : "DEMO"} />)}</div>
         </div>
-        {hasDemo ? <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-3 text-xs leading-5 text-amber-100">Marketplace API not connected. Showing demo data only.</p> : null}
+        {hasDemo ? <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] p-3 text-xs leading-5 text-amber-100">Marketplace API not connected. Showing NOT CONNECTED sample data only.</p> : null}
 
         <Filters sourceView={sourceView} platform={platform} category={category} opportunityLevel={opportunityLevel} competition={competition} marginPotential={marginPotential} trendStatus={trendStatus} sortBy={sortBy} query={query} onSourceView={(value) => { setSourceView(value); setHideDemoData(false); }} onPlatform={setPlatform} onCategory={setCategory} onOpportunityLevel={setOpportunityLevel} onCompetition={setCompetition} onMarginPotential={setMarginPotential} onTrendStatus={setTrendStatus} onSortBy={setSortBy} onQuery={setQuery} onReset={() => { setSourceView("ACTIVE"); setHideDemoData(false); setPlatform("All Platforms"); setCategory(allCategoriesLabel); setOpportunityLevel("All Levels"); setCompetition("All Competition"); setMarginPotential("All Margins"); setTrendStatus("All Trends"); setSortBy("Highest Score"); setQuery(""); }} />
         {manualOpen ? <ManualProductForm manual={manual} saving={saving === "manual"} onChange={setManual} onSave={addManualProduct} /> : null}
@@ -267,7 +267,7 @@ export function ProductIntelligenceCenter() {
 
       <DashboardPanel title="Affiliate Program Activation" description="Input data manual, CSV, atau URL scan untuk mengaktifkan workflow sebelum real API marketplace tersedia.">
         <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-          <input value={affiliateUrl} onChange={(event) => setAffiliateUrl(event.target.value)} placeholder="https://example.com/affiliate-program" className="premium-input px-3 py-2.5 text-sm" />
+          <input value={affiliateUrl} onChange={(event) => setAffiliateUrl(event.target.value)} placeholder="https://shopee.co.id/nama-produk-affiliate" className="premium-input px-3 py-2.5 text-sm" />
           <button type="button" onClick={scanProgram} disabled={saving === "scan"} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] px-4 py-2.5 text-xs font-semibold text-cyan-100 disabled:opacity-60">{saving === "scan" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}Scan URL</button>
         </div>
       </DashboardPanel>
@@ -294,8 +294,9 @@ export function ProductIntelligenceCenter() {
 }
 
 function Shortlist({ products, savedKeys, saving, onSelect, onSave, onCampaign }: { products: ProductView[]; savedKeys: Set<string>; saving: string; onSelect: (product: ProductView) => void; onSave: (product: ProductView) => void; onCampaign: (product: ProductView) => void }) {
+  const single = products.length === 1;
   return (
-    <div className="grid gap-3 xl:grid-cols-5">
+    <div className={single ? "grid gap-3 lg:grid-cols-[minmax(280px,420px)_1fr]" : "grid gap-3 xl:grid-cols-5"}>
       {products.map((product, index) => {
         const saved = savedKeys.has(savedKey(product.productName, product.source));
         return (
@@ -329,11 +330,12 @@ function Shortlist({ products, savedKeys, saving, onSelect, onSave, onCampaign }
               <button type="button" onClick={() => onSelect(product)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-2 text-[11px] font-semibold text-slate-200">View Strategy<ChevronRight className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={() => onSave(product)} disabled={saved || saving === `save-${product.id}`} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-cyan-100 disabled:opacity-60">{saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}{saved ? "Saved" : "Save"}</button>
               <button type="button" onClick={() => onSelect(product)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] px-2.5 py-2 text-[11px] font-semibold text-emerald-100">View Campaign Plan<ChevronRight className="h-3.5 w-3.5" /></button>
-              <button type="button" onClick={() => onCampaign(product)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-semibold text-white"><PackageSearch className="h-3.5 w-3.5" />Create Campaign</button>
+              <button type="button" onClick={() => onCampaign(product)} className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 py-2 text-[11px] font-semibold text-white"><PackageSearch className="h-3.5 w-3.5" />Create Campaign from Product</button>
             </div>
           </article>
         );
       })}
+      {single ? <div className="grid min-h-[270px] place-items-center rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] p-5 text-center"><div><p className="text-sm font-semibold text-white">Butuh pembanding opportunity</p><p className="mt-2 max-w-md text-xs leading-5 text-slate-400">Tambahkan lebih banyak produk manual atau import CSV untuk membandingkan opportunity.</p></div></div> : null}
     </div>
   );
 }
@@ -376,7 +378,7 @@ function CategoryList({ rows }: { rows: ReturnType<typeof buildCategoryRows> }) 
 function PlatformProductList({ platform, products, onSelect }: { platform: MarketplacePlatform; products: ProductView[]; onSelect: (product: ProductView) => void }) {
   return (
     <section className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4">
-      <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-white">{platform}</h3><DataStatusBadge label={products[0]?.dataStatus ?? "DEMO"} /></div>
+      <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-white">{platform}</h3><DataStatusBadge label={products[0]?.dataStatus ?? "NO DATA"} /></div>
       <div className="mt-3 space-y-2">
         {products.length ? products.map((product) => <button type="button" key={product.id} onClick={() => onSelect(product)} className="w-full rounded-lg border border-white/[0.06] bg-white/[0.025] p-3 text-left transition hover:border-cyan-300/20 hover:bg-cyan-300/[0.035]"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-white">{product.productName}</p><p className="mt-1 text-[11px] text-slate-500">{product.category} / {product.marginPotential} margin</p></div><ScorePill value={product.affiliateOpportunityScore} /></div></button>) : <p className="rounded-lg border border-white/[0.06] p-3 text-xs text-slate-500">No product matched current filter.</p>}
       </div>
@@ -388,6 +390,7 @@ function ProductDetailModal({ product, onClose, onCampaign }: { product?: Produc
   if (!product) return null;
   const strategy = product.contentStrategy;
   const plan = product.campaignPlan;
+  const sourceUrl = getProductSourceUrl(product);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 p-0 backdrop-blur-sm md:items-center md:p-6">
       <section className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-white/[0.08] bg-slate-950 p-5 shadow-2xl md:max-w-4xl md:rounded-2xl">
@@ -418,8 +421,8 @@ function ProductDetailModal({ product, onClose, onCampaign }: { product?: Produc
         </div>
         <CampaignPlanSection plan={plan} />
         <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" onClick={() => onCampaign(product)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-white"><PackageSearch className="h-4 w-4" />Create Campaign</button>
-          {product.sourceUrl ? <a href={product.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300"><ExternalLink className="h-4 w-4" />Open Source</a> : null}
+          <button type="button" onClick={() => onCampaign(product)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-white"><PackageSearch className="h-4 w-4" />Create Campaign from Product</button>
+          {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300"><ExternalLink className="h-4 w-4" />Open Source</a> : <button type="button" disabled className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-500 opacity-60"><ExternalLink className="h-4 w-4" />Source belum tersedia</button>}
         </div>
       </section>
     </div>
@@ -480,7 +483,7 @@ async function loadMarketplaceProducts(forceSync: boolean, sourceView: ProductSo
     products: dedupeProducts(safeProducts(payload.products)),
     sourceConfig: payload.sourceConfig ?? {},
     activeSourceType: sourceType(payload.activeSourceType),
-    marketplaceStatus: typeof payload.marketplaceStatus === "string" ? payload.marketplaceStatus : "Marketplace API not connected. Showing demo data only."
+    marketplaceStatus: typeof payload.marketplaceStatus === "string" ? payload.marketplaceStatus : "Marketplace API not connected. Showing NOT CONNECTED sample data only."
   };
 }
 
@@ -541,7 +544,7 @@ function buildSourceSummary(products: AffiliateProductInsightDto[], sourceTypeVa
 }
 
 function sourceStatusMessage(sourceTypeValue: ProductSourceType) {
-  if (sourceTypeValue === "DEMO") return "Data ini hanya contoh demo, belum valid untuk keputusan affiliate.";
+  if (sourceTypeValue === "DEMO") return "Marketplace API not connected. Showing NOT CONNECTED sample data only. Data ini hanya contoh demo, belum valid untuk keputusan affiliate.";
   if (sourceTypeValue === "REAL_API") return "Data berasal dari integrasi API marketplace.";
   return "Data berasal dari input pengguna dan dapat digunakan untuk analisis internal.";
 }
@@ -600,10 +603,10 @@ function Select({ label, value, options, icon, onChange }: { label: string; valu
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label><Label>{label}</Label><input value={value} onChange={(event) => onChange(event.target.value)} className="premium-input mt-1.5 px-3 py-2.5 text-sm" /></label>; }
 function Label({ children }: { children: React.ReactNode }) { return <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">{children}</span>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span className="w-fit rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-100">{children}</span>; }
-function DataStatusBadge({ label }: { label: DataStatus }) { const tone = label === "DEMO" ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : label === "MANUAL" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : label === "CSV_IMPORT" ? "border-blue-300/20 bg-blue-300/[0.08] text-blue-100" : "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100"; return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone}`}>{sourceLabel(label)}</span>; }
+function DataStatusBadge({ label }: { label: DataStatus }) { const tone = label === "NO DATA" ? "border-slate-300/10 bg-white/[0.035] text-slate-400" : label === "DEMO" ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : label === "MANUAL" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : label === "CSV_IMPORT" ? "border-blue-300/20 bg-blue-300/[0.08] text-blue-100" : "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100"; return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone}`}>{sourceLabel(label)}</span>; }
 function CategoryValidityBadge({ sourceType }: { sourceType: CategorySourceStatus }) {
   const demoOnly = sourceType === "DEMO" || sourceType === "EMPTY";
-  const label = sourceType === "EMPTY" ? "NO DATA" : sourceType === "DEMO" ? "DEMO ONLY" : sourceType === "MIXED" ? "MIXED SOURCES" : `VALID FROM ${sourceType}`;
+  const label = sourceType === "EMPTY" ? "NO DATA" : sourceType === "DEMO" ? "NOT CONNECTED - sample data" : sourceType === "MIXED" ? "MIXED SOURCES" : `VALID FROM ${sourceType}`;
   return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${demoOnly ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100" : "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100"}`}>{label}</span>;
 }
 function OpportunityBadge({ level }: { level: ProductView["opportunityLevel"] }) { const tone = level === "HIGH OPPORTUNITY" ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100" : level === "MEDIUM OPPORTUNITY" ? "border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-100" : level === "MONITOR ONLY" ? "border-rose-300/20 bg-rose-300/[0.08] text-rose-100" : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"; return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${tone}`}>{level}</span>; }
@@ -615,16 +618,31 @@ function safeProducts(value: unknown): AffiliateProductInsightDto[] { return Arr
 function dedupeProducts(products: AffiliateProductInsightDto[]) { return Array.from(new Map(products.map((product) => [`${product.platform}|${product.productName}`.toLowerCase(), product])).values()); }
 function dataStatus(product: AffiliateProductInsightDto): DataStatus { return sourceType(product.sourceType); }
 function sourceType(value: unknown): ProductSourceType { return value === "MANUAL" || value === "CSV_IMPORT" || value === "REAL_API" ? value : "DEMO"; }
-function sourceLabel(value: DataStatus) { return value === "REAL_API" ? "REAL API" : value === "CSV_IMPORT" ? "CSV IMPORT" : value; }
+function sourceLabel(value: DataStatus) { return value === "DEMO" ? "NOT CONNECTED - sample data" : value === "REAL_API" ? "REAL API" : value === "CSV_IMPORT" ? "CSV IMPORT" : value; }
+function getProductSourceUrl(product: Pick<AffiliateProductInsightDto, "affiliateUrl" | "sourceUrl" | "productUrl"> & { url?: string | null }) {
+  return [product.affiliateUrl, product.sourceUrl, product.productUrl, product.url].find(isSafeExternalProductUrl);
+}
+function isSafeExternalProductUrl(value: unknown): value is string {
+  if (typeof value !== "string" || !value.trim()) return false;
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.toLowerCase();
+    const blockedDemoHost = ["example", "com"].join(".");
+    return ["https:", "http:"].includes(url.protocol) && host !== blockedDemoHost && !host.endsWith(`.${blockedDemoHost}`);
+  } catch {
+    return false;
+  }
+}
 function sourceViewLabel(value: ProductSourceView) {
   if (value === "ACTIVE") return "Active Source";
   if (value === "ALL") return "All Sources";
+  if (value === "DEMO") return "Demo";
   return sourceLabel(value);
 }
 function downloadCsvTemplate() {
   const rows = [
     ["productName", "platform", "category", "price", "soldCount", "rating", "reviewCount", "commissionRate", "marginLevel", "productUrl", "contentDifficulty", "trendLevel", "competitionLevel"],
-    ["Portable Blender Pro", "Shopee", "Kitchen Tools", "149000", "920", "4.8", "181", "12", "Medium", "https://example.com/product", "Easy", "High", "Medium"]
+    ["Portable Blender Pro", "Shopee", "Kitchen Tools", "149000", "920", "4.8", "181", "12", "Medium", "https://shopee.co.id/search?keyword=portable%20blender%20pro", "Easy", "High", "Medium"]
   ];
   const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll("\"", "\"\"")}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -640,5 +658,5 @@ function sortValue(product: ProductView, sortBy: SortOption) { const score = pro
 function average(values: number[]) { const valid = values.filter((value) => Number.isFinite(value)); return valid.length ? Math.round(valid.reduce((total, value) => total + value, 0) / valid.length) : 0; }
 function contentTypeForCategory(category: string): ProductContentFormat { const value = category.toLowerCase(); if (/fashion muslim|muslim/.test(value)) return "Islamic soft selling"; if (/beauty/.test(value)) return "Beauty transformation"; if (/mom|baby/.test(value)) return "Mom solution"; if (/home|kitchen/.test(value)) return "Home improvement"; if (/digital|education|course|ai/.test(value)) return "Educational soft selling"; if (/food|snack/.test(value)) return "UGC style"; return "Review natural"; }
 function opportunityReason(product: ProductView) { return `Final Opportunity Score ${product.affiliateOpportunityScore}/100: demand ${product.estimatedDemand}, margin ${product.marginPotential}, trend ${product.viralPotential}, trust ${product.trustPotential}, competition ${product.competitionLevel}. ${product.recommendedAction}`; }
-function productSeed(product: ProductView): CampaignProductSeed { return { ...product, productId: product.id, dataMode: product.dataMode, missingProductFields: product.missingFields }; }
+function productSeed(product: ProductView): CampaignProductSeed { return { ...product, productId: product.id, finalOpportunityScore: product.affiliateOpportunityScore, dataMode: product.dataMode, missingProductFields: product.missingFields, contentStrategy: product.contentStrategy, campaignPlan: product.campaignPlan }; }
 function savedKey(title: string, source: string) { return `${title}|${source}`.toLowerCase(); }

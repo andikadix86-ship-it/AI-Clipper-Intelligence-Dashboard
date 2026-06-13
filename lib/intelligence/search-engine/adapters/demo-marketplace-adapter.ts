@@ -7,14 +7,14 @@ export function createDemoMarketplaceAdapter(platform: Extract<IntelligencePlatf
       const collectedAt = new Date().toISOString();
       return {
         status: "DEMO",
-        message: `${label} masih manual/demo source. Tidak ada scraping aktif.`,
+        message: `${label} masih NOT CONNECTED/manual source. Tidak ada scraping aktif.`,
         results: [{
           id: `demo_${platform.toLowerCase()}_${input.keyword.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
           keyword: input.keyword,
           topic: `${input.keyword} marketplace opportunity`,
           title: `${input.keyword} marketplace opportunity`,
           platform,
-          source: `${label} manual demo dataset`,
+          source: platform === "SHOPEE" ? "shopee_demo" : "tokopedia_demo",
           trendScore: 64,
           contentPotentialScore: 72,
           competitionScore: 52,
@@ -26,13 +26,12 @@ export function createDemoMarketplaceAdapter(platform: Extract<IntelligencePlatf
           language: input.language ?? "id",
           rawData: { adapter: "demoMarketplaceAdapter", basis: "manual sample signal" },
           isDemo: true,
-          notes: "Demo Source. Validate product, commission, stock, and seller quality manually.",
+          notes: "NOT CONNECTED source. Validate product, commission, stock, and seller quality manually.",
           collectedAt
         }]
       };
     },
     async getStatus() { return "DEMO"; },
-    getProviderInfo() { return { name: label, source: "manual demo dataset", isDemo: true }; }
+    getProviderInfo() { return { name: label, source: "manual NOT CONNECTED sample dataset", isDemo: true }; }
   };
 }
-

@@ -1,5 +1,5 @@
-import { calculateYouTubeScore } from "@/lib/intelligence/scoring";
 import { resolveYouTubeDataApiKey, updateYouTubeProviderStatus } from "@/lib/intelligence/provider-settings";
+import { mapYouTubeVideoToOpportunity } from "@/lib/intelligence/source-utils";
 import type { IntelligenceResultDto } from "@/lib/intelligence/types";
 import { logYouTubeQuota } from "@/lib/intelligence/youtube-quota";
 import { serverLogger } from "@/lib/server-logger";
@@ -116,48 +116,18 @@ export async function collectYouTubeIntelligence(request: YouTubeSearchRequest):
       const likeCount = statistics?.likeCount ? Number(statistics.likeCount) : undefined;
       const commentCount = statistics?.commentCount ? Number(statistics.commentCount) : undefined;
       const publishedAt = item.snippet?.publishedAt ?? collectedAt;
-      const recencyHours = Math.max(0, (Date.now() - new Date(publishedAt).getTime()) / 3600000);
-      const score = calculateYouTubeScore({ viewCount, likeCount, commentCount, recencyHours, keyword, title: item.snippet?.title ?? keyword });
-      const unavailable = statsUnavailable || viewCount === undefined || likeCount === undefined || commentCount === undefined;
-      const notes = unavailable
-        ? "Collected from YouTube Data API v3. Some metrics unavailable."
-        : "Collected from YouTube Data API v3 public search and statistics endpoints.";
-      return {
-        id: `youtube_${videoId}_${Date.now()}`,
-        keyword,
-        topic: item.snippet?.title ?? keyword,
-        platform: "YOUTUBE",
-        source: "YouTube Data API v3",
-        sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-        score: score.score,
-        confidence: unavailable ? 62 : 86,
-        volumeLabel: viewCount === undefined ? "Views unavailable" : `${viewCount.toLocaleString("en-US")} views`,
-        trendDirection: recencyHours <= 168 ? "RISING" as const : recencyHours <= 720 ? "STABLE" as const : "FALLING" as const,
-        category: "YouTube Search",
-        region: regionCode,
-        language: "id",
-        collectedAt,
-        rawData: {
-          videoId,
-          title: item.snippet?.title,
-          description: item.snippet?.description,
-          channelTitle: item.snippet?.channelTitle,
-          publishedAt,
-          thumbnail: item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.medium?.url,
-          viewCount,
-          likeCount,
-          commentCount,
-          scoreBreakdown: score
-        },
-        isDemo: false,
-        notes,
-        hashtag: "#YouTubeShorts",
-        competitionLevel: score.relevanceScore >= 80 ? "High" as const : "Medium" as const,
-        monetizationPotential: (viewCount ?? 0) >= 100000 ? "High" as const : "Medium" as const,
-        viralReason: `Public YouTube signal collected for keyword "${keyword}".`,
-        opportunity: "Review the public video pattern and create an original short-form angle.",
-        socialPlatform: "YOUTUBE_SHORTS" as const
-      };
+      return mapYouTubeVideoToOpportunity({
+        videoId,
+        title: item.snippet?.title ?? keyword,
+        description: item.snippet?.description,
+        channelTitle: item.snippet?.channelTitle,
+        publishedAt,
+        thumbnail: item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.medium?.url,
+        viewCount,
+        likeCount,
+        commentCount,
+        statsUnavailable
+      }, { keyword, region: regionCode, language: "id", collectedAt });
     });
 
     await updateYouTubeProviderStatus("CONNECTED");

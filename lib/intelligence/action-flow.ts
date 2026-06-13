@@ -1,4 +1,4 @@
-import type { AffiliateProductInsightDto, IntelligenceRecommendationDto, IntelligenceResultDto } from "@/lib/intelligence/types";
+import type { AffiliateProductInsightDto, IntelligenceRecommendationDto, IntelligenceResultDto, ProductCampaignPlan, ProductContentStrategy } from "@/lib/intelligence/types";
 
 const opportunityKey = "saved_opportunities";
 const campaignKey = "affiliate_campaigns";
@@ -14,6 +14,7 @@ export type StudioInsightContext = {
   keyword: string;
   source: string;
   sourceUrl?: string;
+  sourceStatus?: "REAL" | "NOT CONNECTED";
   score: number;
   confidence: number;
   platform: string;
@@ -32,8 +33,10 @@ export type SavedOpportunity = {
   id: string;
   topic: string;
   type: "content_topic" | "affiliate_product";
+  sourceType?: AffiliateProductInsightDto["sourceType"];
   source: string;
   sourceUrl?: string;
+  sourceStatus?: "REAL" | "NOT CONNECTED";
   score: number;
   confidence: number;
   platform: string;
@@ -50,6 +53,9 @@ export type AffiliateCampaignDraft = {
   productId?: string;
   dataMode?: "DEMO DATA" | "MANUAL DATA" | "CSV IMPORT" | "REAL API";
   missingProductFields?: string[];
+  finalOpportunityScore?: number;
+  contentStrategy?: ProductContentStrategy;
+  campaignPlan?: ProductCampaignPlan;
   campaignName: string;
   productName: string;
   targetAudience?: string;
@@ -271,6 +277,9 @@ export function affiliateCampaignFromProduct(product: AffiliateProductInsightDto
     productId: product.id,
     dataMode: product.dataMode,
     missingProductFields: product.missingFields,
+    finalOpportunityScore: product.scoreBreakdown?.finalOpportunityScore ?? product.opportunityScore,
+    contentStrategy: product.contentStrategy,
+    campaignPlan: product.campaignPlan,
     campaignName: `${product.productName} Campaign`,
     productName: product.productName,
     platform: product.platform,
@@ -292,11 +301,13 @@ export function campaignTemplates(campaign: AffiliateCampaignDraft) {
 }
 
 export function defaultCampaignInsight(campaign: AffiliateCampaignDraft) {
+  const strategy = campaign.contentStrategy;
+  const plan = campaign.campaignPlan;
   return {
-    problem: `Aktivitas harian terasa lebih lambat tanpa solusi praktis untuk kategori ${campaign.category}.`,
+    problem: plan?.dailyPlan[0]?.shortScript.problem ?? strategy?.shortScript.problem ?? `Aktivitas harian terasa lebih lambat tanpa solusi praktis untuk kategori ${campaign.category}.`,
     targetAudience: campaign.targetAudience || `Pembeli pemula yang mencari produk ${campaign.category.toLowerCase()} praktis dengan harga terjangkau.`,
-    mainBenefit: `${campaign.productName} membantu menyederhanakan aktivitas harian dengan penggunaan yang mudah.`,
-    contentAngle: `Tampilkan masalah nyata, demo singkat ${campaign.productName}, lalu arahkan penonton ke keranjang kuning.`,
+    mainBenefit: plan?.dailyPlan[0]?.shortScript.proofOrBenefit ?? `${campaign.productName} membantu menyederhanakan aktivitas harian dengan penggunaan yang mudah.`,
+    contentAngle: plan?.campaignTheme ?? strategy?.contentAngle ?? `Tampilkan masalah nyata, demo singkat ${campaign.productName}, lalu arahkan penonton ke keranjang kuning.`,
     riskNote: `${campaign.competitionLevel} competition. Gunakan demo produk yang jelas agar konten tidak terasa generik.`
   };
 }
@@ -309,6 +320,13 @@ export function generateContentKit(campaign: AffiliateCampaignDraft, previous?: 
   const tone = previous?.tone ?? "Helpful and direct";
   const contentAngle = previous?.contentAngle ?? insight.contentAngle;
   const ctas = platformCtas(campaign.targetPlatforms?.length ? campaign.targetPlatforms : [campaign.platform]);
+  const planDays = campaign.campaignPlan?.dailyPlan ?? [];
+  const planHooks = planDays.map((day) => day.hook).filter(Boolean);
+  const planScripts = planDays.map((day) => `${day.stage}: ${day.shortScript.openingHook} ${day.shortScript.problem} ${day.shortScript.productSolution} ${day.shortScript.proofOrBenefit} ${day.shortScript.CTA}`).filter(Boolean);
+  const planCaptions = planDays.map((day) => day.caption).filter(Boolean);
+  const planHashtags = planDays.map((day) => day.hashtags.join(" ")).filter(Boolean);
+  const planCtas = planDays.map((day) => day.CTA).filter(Boolean);
+  const planScenes = planDays.map((day) => `Day ${day.day} ${day.stage}: ${day.angle}`).filter(Boolean);
   return {
     campaignId: campaign.id,
     productId: campaign.productId,
@@ -318,35 +336,35 @@ export function generateContentKit(campaign: AffiliateCampaignDraft, previous?: 
     problem,
     tone,
     contentAngle,
-    hooks: previous?.hooks ?? [
+    hooks: previous?.hooks ?? (planHooks.length ? planHooks : [
       `Masih capek dengan masalah ini? ${campaign.productName} bisa jadi solusi praktisnya.`,
       `Produk kecil ini ternyata bikin aktivitas harian jauh lebih cepat.`,
       `Kalau kamu sering ribet di rumah, coba lihat ${campaign.productName}.`,
       `Sebelum beli produk ${campaign.category.toLowerCase()}, cek solusi sederhana ini.`,
       `Tidak perlu cara rumit. Ini alasan ${campaign.productName} layak dicoba.`
-    ],
-    scripts: previous?.scripts ?? [
+    ]),
+    scripts: previous?.scripts ?? (planScripts.length ? planScripts : [
       `Opening 3 detik: tunjukkan masalah. Middle 7 detik: demo ${campaign.productName} dan jelaskan benefit utama. Closing 5 detik: ajak penonton klik keranjang kuning.`
-    ],
-    captions: previous?.captions ?? [
+    ]),
+    captions: previous?.captions ?? (planCaptions.length ? planCaptions : [
       `${campaign.productName} cocok untuk kamu yang butuh solusi simpel dan cepat. Cek produknya sebelum stok habis.`,
       `Satu produk, satu solusi praktis. Lihat cara pakai ${campaign.productName} lalu cek keranjang kuning.`,
       `Masih cari produk ${campaign.category.toLowerCase()} yang mudah dipakai? Mulai dari ${campaign.productName}.`,
       `Demo singkat ${campaign.productName}. Simpan video ini sebelum menentukan pilihan.`,
       `${mainBenefit} Klik produk untuk lihat detailnya.`
-    ],
-    hashtags: previous?.hashtags ?? [
+    ]),
+    hashtags: previous?.hashtags ?? (planHashtags.length ? planHashtags : [
       `#AffiliateIndonesia #ReviewProduk #${campaign.category.replaceAll(" ", "")}`,
       `#KeranjangKuning #RekomendasiProduk #${campaign.category.replaceAll(" ", "")}`
-    ],
-    ctas: previous?.ctas ?? ctas,
+    ]),
+    ctas: previous?.ctas ?? (planCtas.length ? [...new Set(planCtas)] : ctas),
     voiceOverScripts: previous?.voiceOverScripts ?? [`Pernah merasa aktivitas harian jadi ribet? ${campaign.productName} bisa membantu dengan cara yang praktis. Lihat demonya, cek manfaatnya, lalu ${ctas[0].toLowerCase()}`],
-    scenePlans: previous?.scenePlans ?? ["Scene 1: tampilkan masalah audience dalam 2-3 detik.", `Scene 2: close-up ${campaign.productName}.`, "Scene 3: demo pemakaian dan benefit utama.", `Scene 4: tampilkan CTA: ${ctas[0]}`],
-    videoPrompts: previous?.videoPrompts ?? [
+    scenePlans: previous?.scenePlans ?? (planScenes.length ? planScenes : ["Scene 1: tampilkan masalah audience dalam 2-3 detik.", `Scene 2: close-up ${campaign.productName}.`, "Scene 3: demo pemakaian dan benefit utama.", `Scene 4: tampilkan CTA: ${ctas[0]}`]),
+    videoPrompts: previous?.videoPrompts ?? (planDays.length ? planDays.slice(0, 3).map((day) => `Buat video vertikal untuk Day ${day.day} ${day.stage}. Format ${day.contentFormat}. Hook: ${day.hook}. CTA: ${day.CTA}`) : [
       `Buat video affiliate vertikal 15 detik untuk ${campaign.productName}. Highlight problem-solution, demo benefit utama, dan CTA klik keranjang kuning.`,
       `Buat video review ${campaign.productName} dengan opening masalah, close-up produk, demo pemakaian, lalu CTA singkat.`,
       `Buat video UGC vertikal untuk ${campaign.productName}, tone ${tone.toLowerCase()}, fokus pada ${contentAngle}`
-    ],
+    ]),
     updatedAt: new Date().toISOString()
   };
 }

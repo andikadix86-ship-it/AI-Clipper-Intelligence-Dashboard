@@ -87,7 +87,7 @@ async function collectDemoGoogleTrends(request: GoogleTrendsRequest = {}): Promi
         keyword: signal.keyword,
         topic: signal.topic,
         platform: "GOOGLE_TRENDS",
-        source: "Google Trends demo adapter",
+        source: "google_trends_demo",
         sourceUrl: "https://trends.google.com/trends/",
         score: calculateGoogleTrendsScore({ interestValue: signal.trendSignal, relatedQueryGrowth: signal.relatedQueryGrowth, recencyHours: 4 + index * 6, trendDirection: signal.trendDirection }).score,
         confidence: 35,
@@ -107,7 +107,7 @@ async function collectDemoGoogleTrends(request: GoogleTrendsRequest = {}): Promi
           platformFit: signal.platformFit
         },
         isDemo: true,
-        notes: "Demo insight, belum terhubung ke data real.",
+        notes: "NOT CONNECTED source. Google Trends real endpoint belum terhubung.",
         hashtag: signal.hashtag,
         competitionLevel: signal.competitionLevel,
         monetizationPotential: signal.contentPotential >= 85 ? "High" as const : "Medium" as const,

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { withTimeout } from "@/lib/db-timeout";
 import { sanitizeErrorMessage } from "@/lib/security";
 import { serverLogger } from "@/lib/server-logger";
+import { getConnectionStatus, getProviderErrorMessage } from "@/lib/intelligence/source-utils";
 
 export const runtime = "nodejs";
 
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Niche, keyword, and platform are required." }, { status: 400 });
   }
 
+  const requestedSourceStatus = getConnectionStatus(body);
+  const requestedMode = body.mode ?? (requestedSourceStatus === "REAL" ? "REAL" : "DUMMY");
+
   try {
     const source = body.videoSourceId
       ? await withTimeout(prisma.videoSource.findUnique({ where: { id: body.videoSourceId } }), 5000)
@@ -68,7 +72,8 @@ export async function POST(request: Request) {
     const platform = source ? sourcePlatform[source.platform] : body.platform;
     const keyword = source?.title || body.keyword;
     const hashtag = body.hashtag?.trim() || "#FVNAIStudio";
-    const mode = body.mode ?? "DUMMY";
+    const sourceStatus = requestedSourceStatus;
+    const mode = requestedMode;
     const fypScore = body.viralityScore ?? (platform === "TIKTOK" ? 78 : platform === "YOUTUBE_SHORTS" ? 74 : 70);
     const provider = await runTextWorkflow({
       operation: "AI_ANALYSIS",
@@ -108,10 +113,10 @@ export async function POST(request: Request) {
       competition: body.competitionLevel ?? "Medium",
       opportunity: body.opportunity ?? "Package the idea as a repeatable workflow with a clear before-after moment.",
       monetizationPotential: body.monetizationPotential ?? "Medium",
-      notes: provider.mode === "REAL" ? providerText : "Dummy mode dipilih secara eksplisit. Tidak ada external AI provider yang dipanggil.",
+      notes: provider.mode === "REAL" ? providerText : "NOT CONNECTED mode dipilih secara eksplisit. Tidak ada external AI provider yang dipanggil.",
       providerOutput: providerText,
       providerMode: provider.mode,
-      providerWarning: provider.warning,
+      providerWarning: provider.warning ? getProviderErrorMessage(body.provider ?? "Gemini", provider.warning) : undefined,
       generationJobId: provider.jobId
     };
     const coreIntelligence = buildCoreIntelligence({ topic: keyword, niche: body.niche, platform, trendSignal: fypScore, competitionLevel: normalizeCompetition(body.competitionLevel) });
@@ -150,27 +155,28 @@ export async function POST(request: Request) {
       analysis,
       persistence: savedItem ? { status: "saved", contentItemId: savedItem.id, source: "supabase" } : { status: "not_requested" },
       intelligence: {
-        source: body.source ?? (source ? "Uploaded video" : "Sample analysis input"),
+        source: body.source ?? (source ? "Uploaded video" : "AI Analysis input"),
         sourceUrl: body.sourceUrl ?? source?.url,
         collectedAt: body.collectedAt ?? new Date().toISOString(),
         confidence: body.confidence ?? 25,
-        isDemo: body.isDemo !== false,
-        notes: body.isDemo === false ? "Analysis is based on a real public signal." : "Analysis is based on demo/sample intelligence."
+        sourceStatus,
+        isDemo: sourceStatus !== "REAL",
+        notes: sourceStatus === "REAL" ? "Analysis is based on a real public signal." : "Analysis input is not connected to a real provider source."
       },
       coreIntelligence,
       knowledgeBase
     });
   } catch (error) {
-    serverLogger.warn("ai_analysis.generate.failed", { videoSourceId: body.videoSourceId, mode: body.mode ?? "DUMMY" }, error);
+    serverLogger.warn("ai_analysis.generate.failed", { videoSourceId: body.videoSourceId, mode: requestedMode }, error);
     return NextResponse.json(
       {
         success: false,
-        error: sanitizeErrorMessage(error),
-        message: body.mode === "REAL"
-          ? "AI Analysis REAL gagal. Tidak ada dummy fallback yang digunakan."
+        error: requestedMode === "REAL" ? getProviderErrorMessage(body.provider ?? "Gemini", error) : sanitizeErrorMessage(error),
+        message: requestedMode === "REAL"
+          ? getProviderErrorMessage(body.provider ?? "Gemini", error)
           : "AI Analysis tidak dapat diselesaikan."
       },
-      { status: body.mode === "REAL" ? 502 : 503 }
+      { status: requestedMode === "REAL" ? 502 : 503 }
     );
   }
 }

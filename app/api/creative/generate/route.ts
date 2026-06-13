@@ -6,6 +6,7 @@ import { buildCreativeFinalPrompt } from "@/lib/providers/prompt";
 import { serverLogger } from "@/lib/server-logger";
 import { writeAuditLog } from "@/lib/audit-log";
 import { createNotification } from "@/lib/notification-service";
+import { getProviderErrorMessage } from "@/lib/intelligence/source-utils";
 import type { AIProviderName, CreativeType, ProviderMode } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -66,17 +67,18 @@ export async function POST(request: Request) {
         ? await runtimeInfo.adapter.generateMotionImage(providerInput)
         : await runtimeInfo.adapter.generateVideo(providerInput);
   const isDummy = providerResult.mode === "DUMMY" || providerResult.isDummy === true;
+  const connectionStatus = isDummy ? "NOT CONNECTED" : "REAL";
   const outputSource = isDummy ? "dummy" : "provider";
   const outputUrl = providerResult.previewUrl ?? providerResult.thumbnail;
   const model = providerResult.model ?? (isDummy ? "manual-dummy" : "provider-default");
-  const fallbackWarning = isDummy ? providerResult.warning ?? "Ini hasil dummy fallback, bukan output provider asli." : undefined;
+  const fallbackWarning = isDummy
+    ? body.mode === "REAL"
+      ? getProviderErrorMessage(providerLabel(requestedProvider), runtimeInfo.warning ?? providerResult.warning ?? "Provider real belum tersedia.")
+      : "NOT CONNECTED preview mode. Provider tidak dipanggil."
+    : undefined;
   const relevanceWarning = !isDummy ? "Output may not match prompt. Please regenerate or adjust prompt." : undefined;
   const generatedAt = new Date().toISOString();
-  const generationStatus = isDummy
-    ? body.mode === "REAL"
-      ? "DUMMY_FALLBACK"
-      : "DUMMY_PREVIEW"
-    : "COMPLETED";
+  const generationStatus = connectionStatus;
   const generationError = runtimeInfo.warning ?? fallbackWarning;
   const projectId = body.projectId?.startsWith("project_") ? undefined : body.projectId;
 
@@ -124,6 +126,7 @@ export async function POST(request: Request) {
             model,
             generationType: body.type,
             isDummy,
+            connectionStatus,
             outputSource,
             outputUrl,
             thumbnailUrl: providerResult.thumbnail,
@@ -154,8 +157,9 @@ export async function POST(request: Request) {
           thumbnail: providerResult.thumbnail ?? outputUrl ?? "",
           status: "DRAFT",
           workflowStatus: "DRAFT",
+          sourceType: connectionStatus === "REAL" ? "CREATIVE_STUDIO_REAL" : "CREATIVE_STUDIO_NOT_CONNECTED",
           platform: "INSTAGRAM_REELS",
-          tags: ["creative-studio", body.type.toLowerCase(), body.style?.toLowerCase() ?? "dummy"].filter(Boolean)
+          tags: ["creative-studio", body.type.toLowerCase(), body.style?.toLowerCase() ?? "not-connected"].filter(Boolean)
         }
       }),
       5000
@@ -176,11 +180,11 @@ export async function POST(request: Request) {
       entityType: "CreativeAsset",
       entityId: asset.id,
       message: `${body.type} asset generated with ${requestedProvider}.`,
-      metadata: { projectId, contentItemId: contentItem.id, jobId: job.id, provider: requestedProvider, model, generationType: body.type, isDummy, outputSource }
+      metadata: { projectId, contentItemId: contentItem.id, jobId: job.id, provider: requestedProvider, model, generationType: body.type, isDummy, connectionStatus, outputSource }
     });
     await createNotification({ title: "Asset generated", message: `${contentItem.title} masuk Content Library sebagai Draft.`, type: "ASSET_GENERATED", severity: "SUCCESS", source: "Creative Studio", actionUrl: `/library/${contentItem.id}` });
     if (isDummy) {
-      await createNotification({ title: "Dummy fallback used", message: generationError || "Provider real belum tersedia. Asset menggunakan dummy fallback.", type: "DUMMY_FALLBACK", severity: "WARNING", source: requestedProvider, actionUrl: `/library/${contentItem.id}` });
+      await createNotification({ title: "Provider not connected", message: generationError || "Provider real belum tersedia. Asset ditandai NOT CONNECTED.", type: "DUMMY_FALLBACK", severity: "WARNING", source: requestedProvider, actionUrl: `/library/${contentItem.id}` });
     }
 
     return NextResponse.json({
@@ -190,6 +194,7 @@ export async function POST(request: Request) {
         generationType: body.type,
         mode: providerResult.mode,
         isDummy,
+        connectionStatus,
         outputSource,
         finalPrompt,
         generationStatus,
@@ -239,9 +244,10 @@ export async function POST(request: Request) {
         generationType: body.type,
         mode: providerResult.mode,
         isDummy,
+        connectionStatus: "NOT CONNECTED",
         outputSource,
         finalPrompt,
-        generationStatus: "PERSISTENCE_FALLBACK",
+        generationStatus: "NOT CONNECTED",
         warning
       },
       job: { status: "FALLBACK_PREVIEW", progress: 100, errorMessage: warning },
@@ -251,4 +257,10 @@ export async function POST(request: Request) {
       detail: errorMessage
     });
   }
+}
+
+function providerLabel(provider: AIProviderName) {
+  if (provider === "GEMINI_VEO") return "Gemini";
+  if (provider === "OPENAI_SORA") return "OpenAI";
+  return provider.replaceAll("_", " ");
 }

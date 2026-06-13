@@ -5,7 +5,6 @@ import {
   getGeneratedContent,
   getSavedOpportunities,
   putLocalCampaign,
-  putLocalOpportunity,
   saveGeneratedContent,
   saveOpportunity,
   type AffiliateCampaignDraft,
@@ -68,24 +67,22 @@ export async function listOpportunities(): Promise<DataResult<SavedOpportunity>>
     const data = await response.json();
     if (!response.ok) throw new Error(data.message);
     const database = (data.opportunities ?? []).map(mapOpportunity);
-    const local = getSavedOpportunities().filter((item) => !database.some((row: SavedOpportunity) => row.topic === item.topic && row.source === item.source));
-    return { items: [...database, ...local], source: "database" };
+    return { items: database, source: "database" };
   } catch {
-    return { items: getSavedOpportunities(), source: "local", message: "Database belum tersedia. Opportunity lokal tetap dapat digunakan." };
+    return { items: getSavedOpportunities(), source: "local", message: "Database belum tersedia. Opportunity lokal tampil sebagai Local Draft / NOT CONNECTED." };
   }
 }
 
 export async function persistOpportunity(input: Omit<SavedOpportunity, "id" | "createdAt" | "status">) {
-  const local = saveOpportunity(input);
   try {
-    const response = await fetch("/api/affiliate/opportunities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...local, title: local.topic }) });
+    const response = await fetch("/api/affiliate/opportunities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, title: input.topic, metadata: { sourceType: input.sourceType } }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message);
     const opportunity = mapOpportunity(data.opportunity);
-    putLocalOpportunity(opportunity);
     return { item: opportunity, source: "database" as const, message: "Opportunity tersimpan ke database." };
   } catch {
-    return { item: local, source: "local" as const, message: "Database belum tersedia. Data disimpan sementara secara lokal." };
+    const local = saveOpportunity({ ...input, notes: `${input.notes}\nLocal Draft / NOT CONNECTED: database save failed.`.trim(), dataSource: "local" });
+    return { item: local, source: "local" as const, message: "Database belum tersedia. Data disimpan sebagai Local Draft / NOT CONNECTED." };
   }
 }
 
@@ -130,6 +127,9 @@ function mapCampaign(row: AffiliateCampaignDraft & { metadata?: Record<string, u
     affiliateAccounts: row.campaignAccounts?.map((item) => item.affiliateAccount) ?? row.affiliateAccounts ?? [],
     affiliateAccountIds: row.campaignAccounts?.map((item) => item.affiliateAccount.id) ?? row.affiliateAccountIds ?? [],
     productId: row.productId ?? String(row.metadata?.productId ?? ""),
+    finalOpportunityScore: numberValue(row.finalOpportunityScore ?? row.metadata?.finalOpportunityScore),
+    contentStrategy: objectValue(row.contentStrategy ?? row.metadata?.contentStrategy) as AffiliateCampaignDraft["contentStrategy"],
+    campaignPlan: objectValue(row.campaignPlan ?? row.metadata?.campaignPlan) as AffiliateCampaignDraft["campaignPlan"],
     dataMode: dataMode(row.metadata?.dataMode),
     missingProductFields: stringList(row.metadata?.missingProductFields),
     status: campaignStatus(row.status),
@@ -139,8 +139,8 @@ function mapCampaign(row: AffiliateCampaignDraft & { metadata?: Record<string, u
 }
 function stringList(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; }
 function campaignStatus(value: string): AffiliateCampaignDraft["status"] { return value === "testing" || value === "active" || value === "winner" || value === "paused" ? value : "draft"; }
-function mapOpportunity(row: SavedOpportunity & { title?: string }) { return { ...row, topic: row.topic ?? row.title ?? "", status: "saved" as const, createdAt: String(row.createdAt), dataSource: "database" as const }; }
-function kitMeta(kit: AffiliateContentKit, campaign: AffiliateCampaignDraft) { return { targetAudience: kit.targetAudience, mainBenefit: kit.mainBenefit, problem: kit.problem, contentAngle: kit.contentAngle, updatedAt: kit.updatedAt, productId: campaign.productId, dataMode: campaign.dataMode, missingProductFields: campaign.missingProductFields }; }
+function mapOpportunity(row: SavedOpportunity & { title?: string; metadata?: Record<string, unknown> | null }) { return { ...row, topic: row.topic ?? row.title ?? "", sourceType: productSourceType(row.sourceType ?? row.metadata?.sourceType), status: "saved" as const, createdAt: String(row.createdAt), dataSource: "database" as const }; }
+function kitMeta(kit: AffiliateContentKit, campaign: AffiliateCampaignDraft) { return { targetAudience: kit.targetAudience, mainBenefit: kit.mainBenefit, problem: kit.problem, contentAngle: kit.contentAngle, updatedAt: kit.updatedAt, productId: campaign.productId, dataMode: campaign.dataMode, missingProductFields: campaign.missingProductFields, finalOpportunityScore: campaign.finalOpportunityScore, contentStrategy: campaign.contentStrategy, campaignPlan: campaign.campaignPlan, sourceType: campaign.campaignPlan ? "CAMPAIGN_PLAN" : campaign.isDemo ? "DEMO" : "MANUAL" }; }
 function kitItems(kit: AffiliateContentKit) { return (Object.entries({ hook: kit.hooks, script: kit.scripts, caption: kit.captions, hashtag: kit.hashtags, cta: kit.ctas, voice_over: kit.voiceOverScripts, scene_plan: kit.scenePlans, video_prompt: kit.videoPrompts }) as Array<[string, string[]]>).flatMap(([contentType, values]) => values.map((body, index) => ({ contentType, title: `${contentType.replace("_", " ")} ${index + 1}`, body, metadata: { index } }))); }
 function rowsToKit(campaignId: string, rows: DbGeneratedContent[]): AffiliateContentKit {
   const meta = rows[0]?.metadata ?? {};
@@ -148,3 +148,6 @@ function rowsToKit(campaignId: string, rows: DbGeneratedContent[]): AffiliateCon
   return { campaignId, productId: String(meta.productId ?? ""), dataMode: dataMode(meta.dataMode), targetAudience: String(meta.targetAudience ?? ""), mainBenefit: String(meta.mainBenefit ?? ""), problem: String(meta.problem ?? ""), tone: String(rows[0]?.tone ?? "Helpful and direct"), contentAngle: String(meta.contentAngle ?? ""), hooks: group("hook"), scripts: group("script"), captions: group("caption"), hashtags: group("hashtag"), ctas: group("cta"), voiceOverScripts: group("voice_over"), scenePlans: group("scene_plan"), videoPrompts: group("video_prompt"), updatedAt: String(meta.updatedAt ?? new Date().toISOString()) };
 }
 function dataMode(value: unknown): AffiliateCampaignDraft["dataMode"] | undefined { return value === "DEMO DATA" || value === "MANUAL DATA" || value === "CSV IMPORT" || value === "REAL API" ? value : undefined; }
+function numberValue(value: unknown) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined; }
+function objectValue(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value : undefined; }
+function productSourceType(value: unknown): SavedOpportunity["sourceType"] | undefined { return value === "DEMO" || value === "MANUAL" || value === "CSV_IMPORT" || value === "REAL_API" ? value : undefined; }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getLibraryItem } from "@/lib/library-service";
 import { prisma } from "@/lib/prisma";
 import { demoPlaceholder } from "@/lib/demo-placeholder";
+import { getConnectionStatus } from "@/lib/intelligence/source-utils";
 import type { SocialPlatform } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -24,6 +25,10 @@ type SaveAnalysisRequest = {
   suggestedDuration: number;
   fypScore: number;
   notes?: string;
+  source?: string;
+  sourceUrl?: string;
+  sourceStatus?: "REAL" | "NOT CONNECTED";
+  isDemo?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -39,6 +44,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    const sourceStatus = body.sourceStatus ?? getConnectionStatus({ source: body.source, sourceUrl: body.sourceUrl, isDemo: body.isDemo });
+    const sourceType = sourceStatus === "REAL" ? "TRENDING_YOUTUBE_REAL" : "TRENDING_NOT_CONNECTED";
     const item = await prisma.contentItem.create({
       data: {
         projectId: body.projectId,
@@ -50,7 +57,7 @@ export async function POST(request: Request) {
         thumbnail: demoPlaceholder("Analysis Draft"),
         status: "DRAFT",
         workflowStatus: "DRAFT",
-        sourceType: "TRENDING_AI_ANALYSIS",
+        sourceType,
         contentAngle: body.contentAngle,
         trendKeyword: body.keyword,
         trendPlatform: body.platform,
@@ -60,7 +67,7 @@ export async function POST(request: Request) {
         targetAudience: body.targetAudience,
         editingStyle: body.editingStyle,
         suggestedDuration: body.suggestedDuration,
-        notes: body.notes ?? "",
+        notes: `${body.notes ?? ""}\nSource: ${body.source ?? "AI Analysis"}\nSource URL: ${body.sourceUrl ?? "not available"}\nConnection: ${sourceStatus}`.trim(),
         platform: body.platform,
         tags: body.hashtag.split(/\s+/).map((tag) => tag.replace(/^#/, "").trim()).filter(Boolean)
       }

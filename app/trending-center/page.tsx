@@ -18,6 +18,7 @@ import {
 import { listOpportunities, migrateLocalOpportunities, persistCampaign, persistOpportunity } from "@/lib/intelligence/affiliate-persistence";
 import { trendScoreExplanation } from "@/lib/intelligence/scoring";
 import { youtubeScoreExplanation } from "@/lib/intelligence/scoring";
+import { getConnectionBadge, getConnectionStatus, getSourceBadge, isDemoSource } from "@/lib/intelligence/source-utils";
 import type { AffiliateProductInsightDto, IntelligenceRecommendationDto, IntelligenceResultDto } from "@/lib/intelligence/types";
 import { googleTrendsScoreExplanation, recommendationScoreExplanation } from "@/lib/intelligence/scoring";
 import type { ProjectDto } from "@/lib/types";
@@ -25,7 +26,7 @@ import { IntelligenceSearchPanel } from "@/components/intelligence-search-panel"
 import { ErrorCard } from "@/components/state-cards";
 
 type Trend = IntelligenceResultDto;
-type SourceStatus = { name: string; status: "READY" | "SETUP_REQUIRED" | "DEMO"; message: string };
+type SourceStatus = { name: string; status: "READY" | "REAL" | "SETUP_REQUIRED" | "DEMO" | "NOT CONNECTED"; message: string };
 
 export default function TrendingCenterPage() {
   const { mode } = useWorkspaceMode();
@@ -36,7 +37,8 @@ export default function TrendingCenterPage() {
   const [youtubeStatus, setYoutubeStatus] = useState<{ status: string; message: string }>({ status: "SETUP_REQUIRED", message: "Search YouTube untuk memuat data publik real." });
   const [youtubeLoading, setYoutubeLoading] = useState(false);
   const [youtubeForm, setYoutubeForm] = useState({ keyword: "AI tools", regionCode: "ID", maxResults: "10", order: "relevance" });
-  const [sourceFilter, setSourceFilter] = useState<"ALL" | "YOUTUBE" | "DEMO">("ALL");
+  const [sourceFilter, setSourceFilter] = useState<"ACTIVE" | "YOUTUBE" | "DEMO">("ACTIVE");
+  const [youtubeFallbackPrompt, setYoutubeFallbackPrompt] = useState("");
   const [recommendations, setRecommendations] = useState<IntelligenceRecommendationDto[]>([]);
   const [monitored, setMonitored] = useState<string[]>([]);
   const [savedProducts, setSavedProducts] = useState<string[]>([]);
@@ -53,14 +55,12 @@ export default function TrendingCenterPage() {
     Promise.all([
       fetch("/api/trending").then((response) => response.json()),
       fetch("/api/projects").then((response) => response.json()),
-      fetch("/api/intelligence/products").then((response) => response.json()),
-      fetch("/api/intelligence/recommendations").then((response) => response.json())
+      fetch("/api/intelligence/products").then((response) => response.json())
     ])
-      .then(([trendData, projectData, productData, recommendationData]) => {
+      .then(([trendData, projectData, productData]) => {
         setTrends(Array.isArray(trendData.trends) ? trendData.trends : []);
         setSources(Array.isArray(trendData.sources) ? trendData.sources : []);
         setProducts(Array.isArray(productData.products) ? productData.products : []);
-        setRecommendations(Array.isArray(recommendationData.recommendations) ? recommendationData.recommendations : []);
         const loadedProjects = Array.isArray(projectData.projects) ? projectData.projects : [];
         setProjects(loadedProjects);
         setProjectId(loadedProjects[0]?.id ?? "");
@@ -112,7 +112,11 @@ export default function TrendingCenterPage() {
           editingStyle: "Fast proof-first edit with bold captions.",
           suggestedDuration: 30,
           fypScore: trend.score,
-          notes: `Source: ${trend.source}. Collected: ${trend.collectedAt}. Confidence: ${trend.confidence}%. Demo: ${trend.isDemo}. Competition: ${trend.competitionLevel}. Monetization: ${trend.monetizationPotential}.`
+          notes: `Source: ${trend.source}. Collected: ${trend.collectedAt}. Confidence: ${trend.confidence}%. Demo: ${trend.isDemo}. Competition: ${trend.competitionLevel}. Monetization: ${trend.monetizationPotential}.`,
+          source: trend.source,
+          sourceUrl: trend.sourceUrl,
+          sourceStatus: getConnectionStatus(trend),
+          isDemo: getConnectionStatus(trend) !== "REAL"
         })
       });
       const data = await response.json();
@@ -126,13 +130,15 @@ export default function TrendingCenterPage() {
   }
 
   async function saveTrendOpportunity(trend: Trend) {
-    const result = await persistOpportunity({ topic: trend.topic, type: "content_topic", source: trend.source, sourceUrl: trend.sourceUrl, score: trend.score, confidence: trend.confidence, platform: trend.socialPlatform, reason: trend.viralReason, notes: trend.notes, isDemo: trend.isDemo });
+    const sourceStatus = getConnectionStatus(trend);
+    const result = await persistOpportunity({ topic: trend.topic, type: "content_topic", source: trend.source, sourceUrl: trend.sourceUrl, sourceStatus, score: trend.score, confidence: trend.confidence, platform: trend.socialPlatform, reason: trend.viralReason, notes: trend.notes, isDemo: sourceStatus !== "REAL" });
     setSavedOpportunities((await listOpportunities()).items);
     setToast({ type: "success", message: `${result.item.topic}: ${result.message}` });
   }
 
   async function saveRecommendationOpportunity(item: IntelligenceRecommendationDto) {
-    const result = await persistOpportunity({ topic: item.recommendedTopic, type: "content_topic", source: item.sourceBreakdown.map((source) => source.source).join(", "), sourceUrl: item.sourceUrl, score: item.score, confidence: item.confidence, platform: item.socialPlatform, reason: item.reason, notes: item.notes, isDemo: item.isDemo });
+    const sourceStatus = getConnectionStatus({ source: item.sourceBreakdown.map((source) => source.source).join(", "), isDemo: item.isDemo });
+    const result = await persistOpportunity({ topic: item.recommendedTopic, type: "content_topic", source: item.sourceBreakdown.map((source) => source.source).join(", "), sourceUrl: item.sourceUrl, sourceStatus, score: item.score, confidence: item.confidence, platform: item.socialPlatform, reason: item.reason, notes: item.notes, isDemo: sourceStatus !== "REAL" });
     setSavedOpportunities((await listOpportunities()).items);
     setToast({ type: "success", message: `${result.item.topic}: ${result.message}` });
   }
@@ -172,7 +178,7 @@ export default function TrendingCenterPage() {
 
   const sortedTrends = useMemo(() => [...trends].sort((a, b) => b.score - a.score), [trends]);
   const visibleSignals = useMemo(
-    () => sourceFilter === "YOUTUBE" ? youtubeResults : sourceFilter === "DEMO" ? sortedTrends : [...youtubeResults, ...sortedTrends],
+    () => sourceFilter === "DEMO" ? sortedTrends : youtubeResults,
     [sourceFilter, sortedTrends, youtubeResults]
   );
 
@@ -180,23 +186,49 @@ export default function TrendingCenterPage() {
     event.preventDefault();
     if (!youtubeForm.keyword.trim()) return;
     setYoutubeLoading(true);
+    setYoutubeFallbackPrompt("");
     try {
       const params = new URLSearchParams(youtubeForm);
       const response = await fetch(`/api/intelligence/youtube?${params.toString()}`);
       const data = await response.json();
       setYoutubeStatus({ status: data.status, message: data.message });
       setYoutubeResults(data.results ?? []);
-      if (!response.ok) throw new Error(data.message ?? "YouTube search gagal.");
+      if (!response.ok) {
+        setYoutubeFallbackPrompt("YouTube API gagal atau quota habis. Data real tidak tersedia.");
+        throw new Error(data.message ?? "YouTube search gagal.");
+      }
+      if (data.status !== "READY") {
+        setRecommendations([]);
+        setYoutubeFallbackPrompt("YouTube API gagal atau quota habis. Data real tidak tersedia.");
+        return;
+      }
       if ((data.results ?? []).length > 0) {
-        const recommendationResponse = await fetch("/api/intelligence/recommendations");
+        setSourceFilter("YOUTUBE");
+        const recommendationResponse = await fetch("/api/intelligence/recommendations?source=real");
         const recommendationData = await recommendationResponse.json();
         setRecommendations(recommendationData.recommendations ?? []);
+      } else {
+        setRecommendations([]);
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "YouTube search gagal.";
       setYoutubeResults([]);
-      setToast({ type: "error", message: error instanceof Error ? error.message : "YouTube search gagal." });
+      setRecommendations([]);
+      setYoutubeFallbackPrompt("YouTube API gagal atau quota habis. Data real tidak tersedia.");
+      setToast({ type: "error", message: errorMessage || "YouTube API gagal atau quota habis. Data real tidak tersedia." });
     } finally {
       setYoutubeLoading(false);
+    }
+  }
+
+  async function selectSource(source: "ACTIVE" | "YOUTUBE" | "DEMO") {
+    setSourceFilter(source);
+    if (source === "DEMO") {
+      const response = await fetch("/api/intelligence/recommendations?source=demo");
+      const data = await response.json();
+      setRecommendations(Array.isArray(data.recommendations) ? data.recommendations : []);
+    } else if (!youtubeResults.length) {
+      setRecommendations([]);
     }
   }
 
@@ -210,8 +242,7 @@ export default function TrendingCenterPage() {
             Trending Center
           </div>
           <h1 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">Trending Center</h1>
-          <p className="mt-3 max-w-3xl text-slate-300">Find viral ideas, send them to AI Analysis, or save them directly to a Project as Draft ideas.</p>
-          <div className="mt-3 inline-flex rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-semibold uppercase text-amber-100">Demo insight, belum terhubung ke data real</div>
+          <p className="mt-3 max-w-3xl text-slate-300">Real-data-first trend research. YouTube Data API results are shown first when configured; demo fallback is manual.</p>
         </div>
         <label className="block min-w-72">
           <span className="mb-2 block text-sm font-medium text-slate-300">Save target Project</span>
@@ -254,11 +285,12 @@ export default function TrendingCenterPage() {
           <button type="submit" disabled={youtubeLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">{youtubeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}Search Real Data</button>
         </form>
         <p className="mt-3 text-sm text-slate-400">{youtubeStatus.message}</p>
+        {youtubeFallbackPrompt ? <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100"><span>{youtubeFallbackPrompt}</span><button type="button" onClick={() => selectSource("DEMO")} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Open Demo Mode</button></div> : null}
         {youtubeResults.length ? <YouTubeMarketSummary results={youtubeResults} /> : <div className="mt-4 rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">Belum ada hasil YouTube real. Cari keyword untuk melihat kandidat video, growth signal, dan content opportunity.</div>}
       </section>
 
       <div className="flex flex-wrap gap-2">
-        {(["ALL", "YOUTUBE", "DEMO"] as const).map((source) => <button key={source} type="button" onClick={() => setSourceFilter(source)} className={clsx("rounded-xl border px-4 py-2 text-sm font-semibold", sourceFilter === source ? "border-primary bg-primary text-white" : "border-white/10 bg-white/[0.04] text-slate-300")}>{source === "ALL" ? "All Signals" : source === "YOUTUBE" ? "YouTube Real" : "Demo Signals"}</button>)}
+        {(["ACTIVE", "YOUTUBE", "DEMO"] as const).map((source) => <button key={source} type="button" onClick={() => selectSource(source)} className={clsx("rounded-xl border px-4 py-2 text-sm font-semibold", sourceFilter === source ? "border-primary bg-primary text-white" : "border-white/10 bg-white/[0.04] text-slate-300")}>{source === "ACTIVE" ? "Active Real Results" : source === "YOUTUBE" ? "YouTube Real" : "Demo Fallback"}</button>)}
       </div>
 
       <section className="grid gap-4 xl:grid-cols-2">
@@ -267,7 +299,7 @@ export default function TrendingCenterPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <div className="mb-3 flex flex-wrap gap-2">
-                  <DataBadge isDemo={trend.isDemo} label={trend.platform === "GOOGLE_TRENDS" ? "Demo Google Trends" : undefined} />
+                  <DataBadge isDemo={getConnectionStatus(trend) !== "REAL"} label={getConnectionBadge(trend)} />
                   <Badge>{trend.source}</Badge>
                   <Badge>{socialPlatformLabels[trend.socialPlatform]}</Badge>
                   <Badge>{trend.competitionLevel} competition</Badge>
@@ -310,24 +342,48 @@ export default function TrendingCenterPage() {
                 {savingId === trend.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save to Project
               </button>
-              {trend.sourceUrl ? <a href={trend.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><ExternalLink className="h-4 w-4" />Open Source</a> : null}
+              {trend.sourceUrl ? <a href={trend.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white"><ExternalLink className="h-4 w-4" />Open Source</a> : null}
             </div>
           </article>
         )) : <Empty />}
       </section>
 
-      {mode === "affiliate" ? <ProductHunter products={products} savedProducts={savedProducts} onSave={async (product) => { const result = await persistCampaign({ campaignName: `${product.productName} Campaign`, productName: product.productName, platform: product.platform, category: product.category, trendScore: product.trendScore, competitionLevel: product.competitionLevel, commissionEstimate: product.commissionEstimate, priceRange: product.priceRange, contentPotentialScore: product.contentPotentialScore, source: product.source, sourceUrl: product.sourceUrl, notes: product.notes, isDemo: product.isDemo }); setSavedProducts((current) => current.includes(product.id) ? current : [...current, product.id]); setToast({ type: "success", message: result.message }); }} onSaveOpportunity={async (product) => { const result = await persistOpportunity({ topic: product.productName, type: "affiliate_product", source: product.source, sourceUrl: product.sourceUrl, score: product.trendScore, confidence: product.confidence, platform: product.platform, reason: product.notes, notes: product.notes, isDemo: product.isDemo }); setSavedOpportunities((await listOpportunities()).items); setToast({ type: "success", message: result.message }); }} /> : null}
+      {mode === "affiliate" && sourceFilter === "DEMO" ? <ProductHunter products={products} savedProducts={savedProducts} onSave={async (product) => { const result = await persistCampaign({ campaignName: `${product.productName} Campaign`, productName: product.productName, platform: product.platform, category: product.category, trendScore: product.trendScore, competitionLevel: product.competitionLevel, commissionEstimate: product.commissionEstimate, priceRange: product.priceRange, contentPotentialScore: product.contentPotentialScore, source: product.source, sourceUrl: product.sourceUrl, notes: product.notes, isDemo: product.isDemo }); setSavedProducts((current) => current.includes(product.id) ? current : [...current, product.id]); setToast({ type: "success", message: result.message }); }} onSaveOpportunity={async (product) => { const result = await persistOpportunity({ topic: product.productName, type: "affiliate_product", source: product.source, sourceUrl: product.sourceUrl, score: product.trendScore, confidence: product.confidence, platform: product.platform, reason: product.notes, notes: product.notes, isDemo: product.isDemo }); setSavedOpportunities((await listOpportunities()).items); setToast({ type: "success", message: result.message }); }} /> : null}
     </div>
   );
 }
 
 function RecommendationEngine({ mode, recommendations, monitored, onMonitor, onSave, onCampaign, onProject }: { mode: "creator" | "affiliate"; recommendations: IntelligenceRecommendationDto[]; monitored: string[]; onMonitor: (id: string) => void; onSave: (item: IntelligenceRecommendationDto) => void; onCampaign: (item: IntelligenceRecommendationDto) => void; onProject: (item: IntelligenceRecommendationDto) => void }) {
-  return <section className="glass rounded-2xl p-5"><div><h2 className="text-xl font-semibold text-white">Recommendation Engine v2</h2><p className="mt-2 text-sm leading-6 text-slate-400">{recommendationScoreExplanation}</p></div><div className="mt-5 grid gap-4 xl:grid-cols-2">{recommendations.length ? recommendations.slice(0, 6).map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><DataBadge isDemo={item.isDemo} /><span className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white">{item.score}</span></div><h3 className="mt-3 text-lg font-semibold text-white">{item.recommendedTopic}</h3><p className="mt-2 text-sm leading-6 text-slate-400">{item.reason}</p><p className="mt-3 text-sm leading-6 text-teal-100">{item.contentAngle}</p><div className="mt-4 grid gap-2 sm:grid-cols-3">{Object.entries(item.scoreBreakdown).map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-white/[0.04] p-2"><div className="text-[10px] uppercase text-slate-500">{label.replaceAll(/([A-Z])/g, " $1")}</div><div className="mt-1 font-semibold text-white">{value}</div></div>)}</div><div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400"><Badge>{item.confidence}% confidence</Badge><Badge>{item.platformFit}</Badge><Badge>{item.recommendedAction}</Badge></div><div className="mt-3 text-xs leading-5 text-slate-500">{item.sourceBreakdown.map((source) => `${source.source}: ${source.value}`).join(" | ")}</div><div className="mt-1 text-xs leading-5 text-slate-500">Collected: {new Date(item.collectedAt).toLocaleString("id-ID")} | {item.notes}</div><div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-xs leading-5 text-amber-100">Risk note: {item.riskNote}</div><div className="mt-4 flex flex-wrap gap-2"><Link href={studioHref(recommendationStudioContext(item))} className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white">Send to Creative Studio</Link><button type="button" onClick={() => onSave(item)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">Save Recommendation</button>{mode === "affiliate" ? <button type="button" onClick={() => onCampaign(item)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">Create Campaign</button> : <button type="button" onClick={() => onProject(item)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">Create Project</button>}<button type="button" disabled title="Buat asset terlebih dahulu di Creative Studio." className="cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-600">Send to Approval</button><button type="button" disabled title="Asset Approved diperlukan sebelum scheduling." className="cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-600">Schedule</button><button type="button" onClick={() => onMonitor(item.id)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">{monitored.includes(item.id) ? "Monitoring" : "Monitor"}</button></div></article>) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">Belum ada recommendation. Gunakan Google Trends demo atau cari YouTube real data terlebih dahulu.</div>}</div></section>;
+  return (
+    <section className="glass rounded-2xl p-5">
+      <div><h2 className="text-xl font-semibold text-white">Recommendation Engine v2</h2><p className="mt-2 text-sm leading-6 text-slate-400">{recommendationScoreExplanation}</p></div>
+      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        {recommendations.length ? recommendations.slice(0, 6).map((item) => {
+          const source = item.sourceBreakdown[0]?.source;
+          const demo = item.isDemo || isDemoSource(source);
+          return (
+            <article key={item.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3"><DataBadge isDemo={demo} label={demo ? "NOT CONNECTED" : "REAL"} /><span className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-white">{item.score}</span></div>
+              <h3 className="mt-3 text-lg font-semibold text-white">{item.recommendedTopic}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">{item.reason}</p>
+              <p className="mt-3 text-sm leading-6 text-teal-100">{item.contentAngle}</p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">{Object.entries(item.scoreBreakdown).map(([label, value]) => <div key={label} className="rounded-lg border border-white/10 bg-white/[0.04] p-2"><div className="text-[10px] uppercase text-slate-500">{label.replaceAll(/([A-Z])/g, " $1")}</div><div className="mt-1 font-semibold text-white">{value}</div></div>)}</div>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400"><Badge>{item.confidence}% confidence</Badge><Badge>{item.platformFit}</Badge><Badge>{item.recommendedAction}</Badge></div>
+              <div className="mt-3 text-xs leading-5 text-slate-500">{item.sourceBreakdown.map((itemSource) => `${getSourceBadge(itemSource.source)}: ${itemSource.value}`).join(" | ")}</div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">Collected: {new Date(item.collectedAt).toLocaleString("id-ID")} | {item.notes}</div>
+              <div className={clsx("mt-3 rounded-lg border p-3 text-xs leading-5", demo ? "border-amber-300/20 bg-amber-300/10 text-amber-100" : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100")}>{demo ? "Risk note" : "Source note"}: {item.riskNote}</div>
+              <div className="mt-4 flex flex-wrap gap-2"><Link href={studioHref(recommendationStudioContext(item))} className="rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white">Send to Creative Studio</Link><button type="button" onClick={() => onSave(item)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">Save Recommendation</button>{mode === "affiliate" ? <button type="button" onClick={() => onCampaign(item)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">Create Campaign</button> : <button type="button" onClick={() => onProject(item)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">Create Project</button>}<button type="button" disabled title="Buat asset terlebih dahulu di Creative Studio." className="cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-600">Send to Approval</button><button type="button" disabled title="Asset Approved diperlukan sebelum scheduling." className="cursor-not-allowed rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-600">Schedule</button><button type="button" onClick={() => onMonitor(item.id)} className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-white">{monitored.includes(item.id) ? "Monitoring" : "Monitor"}</button></div>
+            </article>
+          );
+        }) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400 xl:col-span-2">Belum ada hasil. Masukkan keyword lalu klik Search Intelligence atau Search Real Data.</div>}
+      </div>
+    </section>
+  );
 }
 
 function SavedOpportunities({ items, onMigrate }: { items: SavedOpportunity[]; onMigrate: () => void }) {
   const hasLocal = items.some((item) => item.dataSource !== "database");
-  return <section className="glass rounded-2xl p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-white">Saved Opportunities</h2><p className="mt-2 text-sm text-slate-400">Database-first dengan fallback lokal saat Supabase tidak tersedia.</p></div><Badge>{items.length} saved</Badge></div>{hasLocal ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Data lokal ditemukan. Pindahkan ke database?<button type="button" onClick={onMigrate} className="ml-3 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Migrate Now</button></div> : null}{items.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{items.slice(0, 6).map((item) => <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><div className="flex flex-wrap gap-2"><DataBadge isDemo={item.isDemo} /><Badge>{item.dataSource === "database" ? "DB Saved" : "Local Draft"}</Badge><Badge>{item.type.replace("_", " ")}</Badge></div><h3 className="mt-3 font-semibold text-white">{item.topic}</h3><p className="mt-2 text-xs leading-5 text-slate-400">{item.source} | Score {item.score} | Confidence {item.confidence}%</p></div>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">Belum ada opportunity tersimpan. Pilih Save Opportunity pada signal atau recommendation.</p>}</section>;
+  return <section className="glass rounded-2xl p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-semibold text-white">Saved Opportunities</h2><p className="mt-2 text-sm text-slate-400">Database-first dengan fallback lokal saat Supabase tidak tersedia.</p></div><Badge>{items.length} saved</Badge></div>{hasLocal ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Data lokal ditemukan sebagai NOT CONNECTED / Local Draft. Pindahkan ke database?<button type="button" onClick={onMigrate} className="ml-3 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Migrate Now</button></div> : null}{items.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{items.slice(0, 6).map((item) => <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><div className="flex flex-wrap gap-2"><DataBadge isDemo={item.isDemo || item.dataSource !== "database"} label={item.dataSource === "database" && !item.isDemo ? "REAL" : "NOT CONNECTED"} /><Badge>{item.dataSource === "database" ? "DB Saved" : "Local Draft"}</Badge><Badge>{item.type.replace("_", " ")}</Badge></div><h3 className="mt-3 font-semibold text-white">{item.topic}</h3><p className="mt-2 text-xs leading-5 text-slate-400">{item.source} | Score {item.score} | Confidence {item.confidence}%</p></div>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-400">Belum ada opportunity tersimpan. Pilih Save Opportunity pada signal atau recommendation.</p>}</section>;
 }
 
 function YouTubeMarketSummary({ results }: { results: Trend[] }) {
@@ -350,16 +406,16 @@ function publishedAtFor(trend: Trend) {
 }
 
 function SourceCard({ source }: { source: SourceStatus }) {
-  const ready = source.status === "READY";
-  return <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><div className="flex items-center justify-between gap-3"><div className="font-semibold text-white">{source.name}</div><span className={clsx("rounded-full border px-2 py-1 text-[10px] font-semibold uppercase", ready ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100" : "border-amber-300/25 bg-amber-300/10 text-amber-100")}>{source.status.replace("_", " ")}</span></div><p className="mt-2 text-sm leading-6 text-slate-400">{source.message}</p></div>;
+  const ready = source.status === "READY" || source.status === "REAL";
+  return <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4"><div className="flex items-center justify-between gap-3"><div className="font-semibold text-white">{source.name}</div><span className={clsx("rounded-full border px-2 py-1 text-[10px] font-semibold uppercase", ready ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100" : "border-amber-300/25 bg-amber-300/10 text-amber-100")}>{ready ? "REAL" : "NOT CONNECTED"}</span></div><p className="mt-2 text-sm leading-6 text-slate-400">{source.message}</p></div>;
 }
 
 function ProductHunter({ products, savedProducts, onSave, onSaveOpportunity }: { products: AffiliateProductInsightDto[]; savedProducts: string[]; onSave: (product: AffiliateProductInsightDto) => void | Promise<void>; onSaveOpportunity: (product: AffiliateProductInsightDto) => void | Promise<void> }) {
-  return <section className="glass rounded-2xl p-5"><div><h2 className="text-xl font-semibold text-white">Affiliate Product Hunter</h2><p className="mt-2 text-sm text-slate-400">Demo product insight. Marketplace API belum terhubung.</p></div><div className="mt-5 overflow-x-auto"><table className="min-w-[1120px] w-full text-left text-sm"><thead className="text-xs uppercase text-slate-500"><tr>{["Product", "Platform", "Score", "Confidence", "Competition", "Commission Estimate", "Collected", "Source", "Actions"].map((label) => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{products.map((product) => <tr key={product.id} className="border-t border-white/10"><td className="px-3 py-4"><div className="font-semibold text-white">{product.productName}</div><div className="mt-1 text-xs text-amber-100">Demo product insight</div><div className="mt-1 max-w-xs text-slate-500">Demo product insight based on content potential and commission estimate.</div></td><td className="px-3 py-4 text-slate-300">{product.platform}</td><td className="px-3 py-4 font-semibold text-teal-200">{product.trendScore}</td><td className="px-3 py-4 text-slate-300">{product.confidence}%</td><td className="px-3 py-4 text-slate-300">{product.competitionLevel}</td><td className="px-3 py-4 text-slate-300">{product.commissionEstimate}</td><td className="px-3 py-4 text-slate-400">{new Date(product.collectedAt).toLocaleString("id-ID")}</td><td className="px-3 py-4 text-slate-400">{product.source}</td><td className="px-3 py-4"><div className="flex flex-wrap gap-2"><Link href={studioHref(productStudioContext(product))} className="rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-white">Generate Content</Link><button type="button" onClick={() => onSaveOpportunity(product)} className="rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1 text-xs font-semibold text-white">Save Opportunity</button><button type="button" onClick={() => onSave(product)} className="rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-white">{savedProducts.includes(product.id) ? "Campaign Created" : "Create Campaign"}</button></div></td></tr>)}</tbody></table></div></section>;
+  return <section className="glass rounded-2xl p-5"><div><h2 className="text-xl font-semibold text-white">Affiliate Product Hunter</h2><p className="mt-2 text-sm text-slate-400">Marketplace API not connected. Showing NOT CONNECTED sample data only.</p></div><div className="mt-5 overflow-x-auto"><table className="min-w-[1120px] w-full text-left text-sm"><thead className="text-xs uppercase text-slate-500"><tr>{["Product", "Platform", "Score", "Confidence", "Competition", "Commission Estimate", "Collected", "Source", "Actions"].map((label) => <th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{products.map((product) => <tr key={product.id} className="border-t border-white/10"><td className="px-3 py-4"><div className="font-semibold text-white">{product.productName}</div><div className="mt-1 text-xs text-amber-100">NOT CONNECTED - sample data</div><div className="mt-1 max-w-xs text-slate-500">Sample fallback based on demo content potential and commission estimate.</div></td><td className="px-3 py-4 text-slate-300">{product.platform}</td><td className="px-3 py-4 font-semibold text-teal-200">{product.trendScore}</td><td className="px-3 py-4 text-slate-300">{product.confidence}%</td><td className="px-3 py-4 text-slate-300">{product.competitionLevel}</td><td className="px-3 py-4 text-slate-300">{product.commissionEstimate}</td><td className="px-3 py-4 text-slate-400">{new Date(product.collectedAt).toLocaleString("id-ID")}</td><td className="px-3 py-4 text-slate-400">{product.source}</td><td className="px-3 py-4"><div className="flex flex-wrap gap-2"><Link href={studioHref(productStudioContext(product))} className="rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-white">Generate Content</Link><button type="button" onClick={() => onSaveOpportunity(product)} className="rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1 text-xs font-semibold text-white">Save Opportunity</button><button type="button" onClick={() => onSave(product)} className="rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-white">{savedProducts.includes(product.id) ? "Campaign Created" : "Create Campaign"}</button></div></td></tr>)}</tbody></table></div></section>;
 }
 
 function DataBadge({ isDemo, label }: { isDemo: boolean; label?: string }) {
-  return <span className={clsx("rounded-full border px-3 py-1 text-xs font-semibold", isDemo ? "border-amber-300/25 bg-amber-300/10 text-amber-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>{label ?? (isDemo ? "Demo" : "Real")}</span>;
+  return <span className={clsx("rounded-full border px-3 py-1 text-xs font-semibold", isDemo ? "border-amber-300/25 bg-amber-300/10 text-amber-100" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100")}>{label ?? (isDemo ? "NOT CONNECTED" : "REAL")}</span>;
 }
 
 function DirectionIcon({ direction }: { direction: Trend["trendDirection"] }) {

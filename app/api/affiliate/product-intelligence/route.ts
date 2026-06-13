@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       take: number(url.searchParams.get("take")),
       sourceType
     });
-    const marketplaceStatus = activeSourceType === "DEMO" ? "Marketplace API not connected. Showing demo data only." : `${activeSourceType} product data active.`;
+    const marketplaceStatus = activeSourceType === "DEMO" ? "Marketplace API not connected. Showing NOT CONNECTED sample data only." : `${activeSourceType} product data active.`;
     return NextResponse.json({ success: true, data: { products, sourceConfig, activeSourceType, marketplaceStatus, sourceView: sourceType ?? "ACTIVE" }, products, sourceConfig, activeSourceType, marketplaceStatus, sourceView: sourceType ?? "ACTIVE", meta: { source: "engine", count: products.length, activeSourceType, marketplaceStatus, sourceView: sourceType ?? "ACTIVE", sourceStatus: sourceConfig[url.searchParams.get("source") as keyof typeof sourceConfig] } });
   } catch (error) {
     serverLogger.error("affiliate.product_intelligence.list_failed", error);

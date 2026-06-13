@@ -61,9 +61,16 @@ export async function searchIntelligence(input: IntelligenceSearchInput) {
     }
   });
 
+  const providerFailures = adapterResponses.filter(({ response }) => response.status === "ERROR" || response.status === "MISSING");
+  const message = results.length
+    ? `${results.length} intelligence signals dikumpulkan.`
+    : providerFailures.length
+      ? `${providerFailures.map(({ response }) => response.message).join(" ")} Gunakan demo fallback hanya jika diperlukan.`
+      : "Belum ada hasil. Masukkan keyword lain atau pilih source demo secara manual.";
+
   return {
     status: results.length ? "READY" : "NO_RESULTS",
-    message: results.length ? `${results.length} intelligence signals dikumpulkan.` : "Belum ada hasil. Periksa provider setup atau gunakan source demo.",
+    message,
     cached: false,
     runId: run.id,
     results,
@@ -75,7 +82,7 @@ export async function searchIntelligence(input: IntelligenceSearchInput) {
 function normalizeInput(input: IntelligenceSearchInput): IntelligenceSearchInput {
   const keyword = input.keyword.trim();
   if (keyword.length < 2) throw new Error("Keyword minimal 2 karakter.");
-  const platforms = input.platforms.length ? [...new Set(input.platforms)] : ["GOOGLE_TRENDS", "YOUTUBE", "TIKTOK"] as IntelligencePlatform[];
+  const platforms = input.platforms.length ? [...new Set(input.platforms)] : ["YOUTUBE"] as IntelligencePlatform[];
   return {
     ...input,
     keyword,

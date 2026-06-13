@@ -9,7 +9,7 @@ import { generateProductContentStrategy } from "@/lib/affiliate/product-content-
 import { calculateAffiliateProductScore, productOpportunityInsight } from "@/lib/affiliate/product-scoring";
 import type { AffiliateProductInsightDto } from "@/lib/intelligence/types";
 
-const demoWarning = "Demo data active. Configure API or import real product data to test real workflow.";
+const demoWarning = "Marketplace API not connected. Showing NOT CONNECTED sample data only.";
 type ProductSourceType = "DEMO" | "MANUAL" | "CSV_IMPORT" | "REAL_API";
 
 type Group = "trending" | "commission" | "competition" | "viral" | "recommended";
@@ -112,6 +112,6 @@ function Field({ label, value, strong = false }: { label: string; value: string;
 function by(rows: AffiliateProductInsightDto[], value: (item: AffiliateProductInsightDto) => number) { return [...rows].sort((a, b) => value(b) - value(a))[0]; }
 function score(product: AffiliateProductInsightDto) { return calculateAffiliateProductScore(product); }
 function sourceType(value: unknown): ProductSourceType { return value === "MANUAL" || value === "CSV_IMPORT" || value === "REAL_API" ? value : "DEMO"; }
-function sourceLabel(value: ProductSourceType) { return value === "REAL_API" ? "REAL API" : value === "CSV_IMPORT" ? "CSV IMPORT" : value; }
+function sourceLabel(value: ProductSourceType) { return value === "DEMO" ? "NOT CONNECTED - sample data" : value === "REAL_API" ? "REAL API" : value === "CSV_IMPORT" ? "CSV IMPORT" : value; }
 function money(value?: number) { return value && value > 0 ? `Rp${Math.round(value).toLocaleString("id-ID")}` : "Missing"; }
 function number(value?: number) { return Number.isFinite(value) && value ? value.toLocaleString("id-ID") : "Missing"; }

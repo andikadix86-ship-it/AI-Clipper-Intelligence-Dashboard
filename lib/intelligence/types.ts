@@ -7,6 +7,8 @@ export type IntelligenceResultDto = {
   platform: string;
   source: string;
   sourceUrl?: string;
+  sourceStatus?: "REAL" | "NOT CONNECTED";
+  status?: "REAL" | "NOT CONNECTED";
   score: number;
   confidence: number;
   volumeLabel: string;

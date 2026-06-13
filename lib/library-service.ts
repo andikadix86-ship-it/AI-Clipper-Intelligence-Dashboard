@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { assetStatusLabels, contentStatusLabels, contentTypeLabels, fallbackLibraryItems, socialPlatformLabels } from "@/lib/content-library";
+import { assetStatusLabels, contentStatusLabels, contentTypeLabels, socialPlatformLabels } from "@/lib/content-library";
 import { prisma } from "@/lib/prisma";
 import type { ContentStatus, ContentType, LibraryAssetStatus, LibraryItemDto, SocialPlatform } from "@/lib/types";
 
@@ -319,11 +319,14 @@ export function mapContentItem(item: ContentWithRelations): LibraryItemDto {
 function normalizeGenerationWarning(warning?: string) {
   if (!warning) return undefined;
   const normalized = warning.toLowerCase();
-  if (normalized.includes("quota") || normalized.includes("rate-limit") || normalized.includes("rate limit")) {
-    return "Dummy fallback used. Provider API quota limit reached.";
+  if (normalized.includes("gemini") && (normalized.includes("timeout") || normalized.includes("timed out") || normalized.includes("unavailable"))) {
+    return "Gemini API timeout. Provider belum stabil.";
+  }
+  if (normalized.includes("openai") && (normalized.includes("quota") || normalized.includes("billing") || normalized.includes("rate-limit") || normalized.includes("rate limit"))) {
+    return "OpenAI quota/billing error. Provider belum tersedia.";
   }
   if (normalized.includes("api key") || normalized.includes("401") || normalized.includes("403")) {
-    return "Dummy fallback used. Provider API key or permission is invalid.";
+    return "Provider NOT CONNECTED. API key or permission is invalid.";
   }
   if (normalized.includes("not implemented")) {
     return warning;
@@ -332,48 +335,10 @@ function normalizeGenerationWarning(warning?: string) {
 }
 
 export async function ensureLibrarySeed() {
-  const count = await prisma.contentItem.count();
-  if (count > 0) return;
-
-  const project =
-    (await prisma.project.findFirst()) ??
-    (await prisma.project.create({
-      data: {
-        name: "Creator Growth Engine",
-        niche: "AI productivity for creators",
-        category: "Education",
-        targetAccounts: ["Fatih Shorts"],
-        contentMode: "CLIPPER"
-      }
-    }));
-
-  await prisma.contentItem.createMany({
-    data: fallbackLibraryItems.map((item) => ({
-      projectId: project.id,
-      type: item.type as Prisma.ContentItemCreateManyInput["type"],
-      title: item.title,
-      description: item.description,
-      caption: item.caption,
-      thumbnail: item.thumbnail,
-      status: item.status,
-      workflowStatus: item.workflowStatus,
-      reviewNotes: item.reviewNotes,
-      rejectReason: item.rejectReason,
-      approvedAt: item.approvedAt ? new Date(item.approvedAt) : undefined,
-      approvedBy: item.approvedBy,
-      platform: item.platform,
-      tags: item.tags,
-      sourceType: item.sourceType ?? "DEMO_SAMPLE",
-      assetStatus: item.assetStatus,
-      versionNumber: item.versionNumber,
-      isLatestVersion: item.isLatestVersion,
-      versionNotes: item.versionNotes
-    }))
-  });
+  return;
 }
 
 export async function getLibraryItems() {
-  await ensureLibrarySeed();
   const items = await prisma.contentItem.findMany({
     orderBy: { updatedAt: "desc" },
     include: {

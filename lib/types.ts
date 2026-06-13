@@ -101,6 +101,7 @@ export type CreativeAssetDto = {
   generationType?: CreativeType;
   mode?: ProviderMode;
   isDummy?: boolean;
+  connectionStatus?: "REAL" | "NOT CONNECTED";
   outputSource?: "provider" | "dummy";
   finalPrompt?: string;
   generationStatus?: string;

@@ -95,7 +95,7 @@ export default function CreativeStudioPage() {
       setJob(data.job ?? { id: data.jobId, status: "COMPLETED", progress: 100, errorMessage: data.warning });
       setMessage(data.warning ?? data.relevanceWarning ?? `Asset generated in ${data.mode ?? mode} mode and saved to Content Library.`);
     } catch {
-      const errorMessage = "Provider request failed. Dummy preview remains available; retry when the connection is stable.";
+      const errorMessage = "Provider request failed. No real asset generated.";
       setMessage(errorMessage);
       setJob({ status: "FAILED", progress: 100, errorMessage });
     } finally {
@@ -112,7 +112,7 @@ export default function CreativeStudioPage() {
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">Creative Studio</h1>
         <p className="mt-3 max-w-3xl text-slate-300">
-          Create visual assets from a prompt. Choose Dummy Preview for quick mockups or Real Provider to send the prompt to a connected provider.
+          Create visual assets from a prompt. Choose NOT CONNECTED preview for mockups or REAL mode to send the prompt to a connected provider.
         </p>
       </header>
 
@@ -121,7 +121,7 @@ export default function CreativeStudioPage() {
           {insightContext ? (
             <div className="mb-5 rounded-xl border border-blue-300/20 bg-blue-300/10 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-100">{insightContext.isDemo ? "Demo Source" : "Real Source"}</span>
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-100">{insightContext.isDemo ? "NOT CONNECTED" : "REAL"}</span>
                 <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-100">{insightContext.platform}</span>
                 <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-100">Score {insightContext.score}</span>
               </div>
@@ -204,8 +204,8 @@ export default function CreativeStudioPage() {
               </Field>
               <Field label="Mode">
                 <select value={mode} onChange={(e) => setMode(e.target.value as ProviderMode)} className="premium-input px-4 py-3">
-                  <option value="DUMMY">Dummy Preview</option>
-                  <option value="REAL">Real Provider</option>
+                  <option value="DUMMY">NOT CONNECTED Preview</option>
+                  <option value="REAL">REAL Provider</option>
                 </select>
               </Field>
             </div>
@@ -269,7 +269,7 @@ export default function CreativeStudioPage() {
                   <div className="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
                     <span className="rounded-full bg-white/10 px-3 py-1 text-slate-100">{providerLabels[asset.provider ?? provider]}</span>
                     <span className="rounded-full bg-white/10 px-3 py-1 text-slate-100">{asset.model ?? "provider-default"}</span>
-                    <span className={clsx("rounded-full px-3 py-1", asset.isDummy ? "bg-amber-300/20 text-amber-100" : "bg-teal-300/20 text-teal-100")}>{asset.isDummy ? "Dummy" : "Real"}</span>
+                    <span className={clsx("rounded-full px-3 py-1", asset.connectionStatus === "REAL" || !asset.isDummy ? "bg-teal-300/20 text-teal-100" : "bg-amber-300/20 text-amber-100")}>{asset.connectionStatus ?? (asset.isDummy ? "NOT CONNECTED" : "REAL")}</span>
                     <span className="rounded-full bg-white/10 px-3 py-1 text-slate-100">{(asset.generationType ?? asset.type).replace("_", " ")}</span>
                     <span className="rounded-full bg-white/10 px-3 py-1 text-slate-100">{asset.outputSource ?? "unknown source"}</span>
                     <span className="rounded-full bg-white/10 px-3 py-1 text-slate-100">{asset.generationStatus ?? asset.status}</span>
@@ -277,7 +277,7 @@ export default function CreativeStudioPage() {
                   <h2 className="text-2xl font-semibold text-white">{asset.title}</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Original prompt: {asset.prompt}</p>
                   {asset.finalPrompt ? <p className="mt-1 line-clamp-3 max-w-2xl text-xs leading-5 text-slate-400">Final prompt sent: {asset.finalPrompt}</p> : null}
-                  {asset.isDummy ? <p className="mt-3 text-sm font-semibold text-amber-200">Ini hasil dummy fallback, bukan output provider asli.{asset.warning ? ` ${asset.warning}` : ""}</p> : null}
+                  {asset.isDummy ? <p className="mt-3 text-sm font-semibold text-amber-200">Provider NOT CONNECTED. Output ini bukan response provider real.{asset.warning ? ` ${asset.warning}` : ""}</p> : null}
                   {asset.relevanceWarning ? <p className="mt-2 text-xs text-slate-400">{asset.relevanceWarning}</p> : null}
                 </div>
               </>
@@ -310,9 +310,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ProviderErrorCard({ message }: { message: string }) {
   return (
     <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.07] p-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-amber-100"><AlertTriangle className="h-4 w-4" /> Provider fallback active</div>
+      <div className="flex items-center gap-2 text-sm font-semibold text-amber-100"><AlertTriangle className="h-4 w-4" /> Provider NOT CONNECTED</div>
       <p className="mt-2 text-xs leading-5 text-amber-100/80">{message}</p>
-      <p className="mt-2 text-[11px] leading-5 text-slate-400">UI tetap aktif. Gunakan preview dummy atau coba ulang setelah provider dan database tersedia.</p>
+      <p className="mt-2 text-[11px] leading-5 text-slate-400">UI tetap aktif, tetapi hasil ini tidak boleh dianggap output provider real.</p>
     </div>
   );
 }

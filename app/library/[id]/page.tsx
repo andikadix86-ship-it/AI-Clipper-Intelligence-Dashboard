@@ -252,14 +252,14 @@ export default function LibraryDetailPage({ params }: { params: { id: string } }
           <div className="relative aspect-[4/5] bg-slate-950">
             <img src={item.thumbnail} alt="" className="h-full w-full object-cover opacity-65 mix-blend-luminosity" />
             <div className="absolute left-5 top-5 rounded-full bg-slate-950/80 px-3 py-1 text-sm font-semibold text-teal-100">{item.typeLabel}</div>
-            {item.generationMode ? <div className={clsx("absolute right-5 top-5 rounded-full border bg-slate-950/85 px-3 py-1 text-xs font-semibold uppercase", item.isDummyGeneration ? "border-amber-300/30 text-amber-100" : "border-teal-300/30 text-teal-100")}>{item.isDummyGeneration ? "Dummy Preview / Fallback" : "Real Provider"}</div> : null}
+            {item.generationMode ? <div className={clsx("absolute right-5 top-5 rounded-full border bg-slate-950/85 px-3 py-1 text-xs font-semibold uppercase", item.isDummyGeneration ? "border-amber-300/30 text-amber-100" : "border-teal-300/30 text-teal-100")}>{item.isDummyGeneration ? "NOT CONNECTED" : "REAL"}</div> : null}
             <div className="absolute bottom-5 left-5 right-5">
               <div className={clsx("mb-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold", statusBadgeClasses[item.workflowStatus])}>{item.workflowStatusLabel}</div>
               <h1 className="text-2xl font-semibold text-white">{form.title}</h1>
               <p className="mt-2 text-sm leading-6 text-slate-300">{form.caption || item.caption}</p>
             </div>
           </div>
-          {item.isDummyGeneration ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Ini hasil dummy preview atau fallback, bukan output provider asli.{item.generationWarning ? ` ${item.generationWarning}` : ""}</div> : null}
+          {item.isDummyGeneration ? <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Provider NOT CONNECTED. Output ini bukan response provider asli.{item.generationWarning ? ` ${item.generationWarning}` : ""}</div> : null}
         </div>
 
         <div className="glass rounded-2xl p-5">
@@ -413,7 +413,7 @@ export default function LibraryDetailPage({ params }: { params: { id: string } }
               <Info label="Created Date" value={item.date} />
               <Info label="Project" value={item.project} />
               <Info label="Social Account" value={item.socialAccount} />
-              <Info label="Generation Source" value={item.generationMode ? (item.isDummyGeneration ? "Dummy Preview / Fallback" : "Real Provider") : "Manual or non-provider asset"} />
+              <Info label="Generation Source" value={item.generationMode ? (item.isDummyGeneration ? "NOT CONNECTED" : "REAL") : "Manual or non-provider asset"} />
               <Info label="Provider" value={item.generationProvider?.replaceAll("_", " ") || "Not recorded"} />
               <Info label="Model" value={item.generationModel || "Not recorded"} />
               <Info label="Generation Type" value={item.generationType?.replaceAll("_", " ") || item.typeLabel} />

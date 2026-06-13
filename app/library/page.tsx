@@ -194,7 +194,7 @@ export default function LibraryPage() {
           <Filter label="Social Account" value={filters.socialAccount} options={options.socialAccount} onChange={(socialAccount) => setFilters({ ...filters, socialAccount })} />
           <Filter label="Type" value={filters.type} options={options.type} onChange={(type) => setFilters({ ...filters, type })} />
           <Filter label="Format" value={filters.format} options={["All", "Image", "Video", "Text"]} onChange={(format) => setFilters({ ...filters, format })} />
-          <Filter label="Generation Source" value={filters.generationSource} options={["All", "Real Provider", "Dummy Preview / Fallback", "Manual / Other"]} onChange={(generationSource) => setFilters({ ...filters, generationSource })} />
+          <Filter label="Generation Source" value={filters.generationSource} options={["All", "REAL", "NOT CONNECTED", "Manual / Other"]} onChange={(generationSource) => setFilters({ ...filters, generationSource })} />
           <Filter label="Workflow" value={filters.workflowStatus} options={options.workflowStatus} onChange={(workflowStatus) => setFilters({ ...filters, workflowStatus })} />
           <Filter label="Asset Status" value={filters.assetStatus} options={options.assetStatus} onChange={(assetStatus) => setFilters({ ...filters, assetStatus })} />
           <Filter label="Platform" value={filters.platform} options={options.platform} onChange={(platform) => setFilters({ ...filters, platform })} />
@@ -424,12 +424,12 @@ function Badge({ children, className }: { children: React.ReactNode; className: 
 
 function GenerationBadge({ item, className }: { item: LibraryItemDto; className?: string }) {
   const dummy = item.isDummyGeneration || item.generationMode === "DUMMY";
-  const label = dummy ? (item.generationWarning ? "Dummy Fallback" : "Dummy Preview") : "Real Provider";
+  const label = dummy ? "NOT CONNECTED" : "REAL";
   return <span className={clsx("inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold uppercase", dummy ? "border-amber-300/30 bg-slate-950/85 text-amber-100" : "border-teal-300/30 bg-slate-950/85 text-teal-100", className)}>{label}</span>;
 }
 
 function DemoBadge({ className }: { className?: string }) {
-  return <span className={clsx("inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase text-amber-100", className)}>Demo sample</span>;
+  return <span className={clsx("inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-1 text-[10px] font-semibold uppercase text-amber-100", className)}>NOT CONNECTED</span>;
 }
 
 function contentFormat(item: LibraryItemDto) {
@@ -439,8 +439,8 @@ function contentFormat(item: LibraryItemDto) {
 }
 
 function generationSource(item: LibraryItemDto) {
-  if (item.generationOutputSource === "provider" || item.generationMode === "REAL") return "Real Provider";
-  if (item.isDummyGeneration || item.generationOutputSource === "dummy" || item.generationMode === "DUMMY") return "Dummy Preview / Fallback";
+  if (item.generationOutputSource === "provider" || item.generationMode === "REAL") return "REAL";
+  if (item.isDummyGeneration || item.generationOutputSource === "dummy" || item.generationMode === "DUMMY") return "NOT CONNECTED";
   return "Manual / Other";
 }
 

@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { socialPlatformLabels } from "@/lib/content-library";
 import { studioHref } from "@/lib/intelligence/action-flow";
 import { RecentAnalysisList } from "@/components/recent-analysis-list";
+import { getConnectionBadge, getConnectionStatus, getProviderErrorMessage } from "@/lib/intelligence/source-utils";
 import type { AIProviderName, ContentType, ProjectDto, ProviderMode, SocialPlatform } from "@/lib/types";
 
 type TrendInput = {
@@ -51,20 +52,6 @@ type AnalysisForm = {
 
 type SocialAccountOption = { id: string; name: string; projectId?: string; status?: string; isActive?: boolean };
 
-const defaultTrend: TrendInput = {
-  niche: "AI Automation",
-  keyword: "faceless workflow",
-  hashtag: "#AITools",
-  platform: "TIKTOK",
-  competitionLevel: "Medium",
-  monetizationPotential: "High",
-  viralReason: "Short proof-based AI workflows are getting strong saves and shares from creators.",
-  opportunity: "Create a step-by-step clip plan showing one automation result in the first 3 seconds.",
-  source: "Sample analysis input",
-  confidence: 25,
-  isDemo: true
-};
-
 const emptyAnalysis: AnalysisForm = {
   title: "",
   hook: "",
@@ -92,7 +79,7 @@ export default function AIAnalysisPage() {
 
 function AIAnalysisContent() {
   const searchParams = useSearchParams();
-  const [trend, setTrend] = useState<TrendInput>(defaultTrend);
+  const [trend, setTrend] = useState<TrendInput | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisForm>(emptyAnalysis);
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [socialAccounts, setSocialAccounts] = useState<SocialAccountOption[]>([]);
@@ -111,15 +98,15 @@ function AIAnalysisContent() {
     const recommendation = searchParams.get("recommendation");
     if (encoded) {
       try {
-        setTrend(JSON.parse(encoded));
+        applyTrend(JSON.parse(encoded));
       } catch {
-        setToast({ type: "error", message: "Trend payload tidak valid, memakai dummy default." });
+        setToast({ type: "error", message: "Trend payload tidak valid. Tidak memakai dummy default." });
       }
     }
     if (similar) {
       try {
         const payload = JSON.parse(similar);
-        setTrend({
+        applyTrend({
           niche: "Similar Content",
           keyword: payload.title ?? "similar content",
           hashtag: "#SimilarContent",
@@ -127,7 +114,10 @@ function AIAnalysisContent() {
           competitionLevel: "Medium",
           monetizationPotential: "High",
           viralReason: payload.recommendation ?? "Recommendation engine found a repeatable content pattern.",
-          opportunity: "Turn this recommendation into a new editable content plan."
+          opportunity: "Turn this recommendation into a new editable content plan.",
+          source: "Similar Content",
+          confidence: 50,
+          isDemo: true
         });
       } catch {
         setToast({ type: "error", message: "Similar content payload tidak valid." });
@@ -136,7 +126,7 @@ function AIAnalysisContent() {
     if (recommendation) {
       try {
         const payload = JSON.parse(recommendation);
-        setTrend({
+        applyTrend({
           niche: payload.recommendedTopic ?? "Recommended Topic",
           keyword: payload.keyword ?? payload.recommendedTopic ?? "recommended topic",
           hashtag: "#RecommendedContent",
@@ -176,9 +166,9 @@ function AIAnalysisContent() {
   }, []);
 
   useEffect(() => {
-    generateAnalysis();
+    if (trend) generateAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trend.keyword, trend.platform]);
+  }, [trend?.keyword, trend?.platform]);
 
   const projectAccounts = useMemo(
     () => socialAccounts.filter((account) => !projectId || !account.projectId || account.projectId === projectId),
@@ -186,6 +176,10 @@ function AIAnalysisContent() {
   );
 
   async function generateAnalysis() {
+    if (!trend) {
+      setToast({ type: "error", message: "Belum ada trend input. Kirim data dari Trending Center atau Recommendation Engine terlebih dahulu." });
+      return;
+    }
     setLoading(true);
     try {
       const response = await fetch("/api/ai-analysis/generate", {
@@ -211,21 +205,32 @@ function AIAnalysisContent() {
         postingTimeRecommendation: data.analysis.postingTimeRecommendation ?? "",
         notes: data.analysis.notes ?? "",
         providerMode: data.analysis.providerMode === "REAL" ? "REAL" : "DUMMY",
-        providerWarning: data.analysis.providerWarning
+        providerWarning: data.analysis.providerWarning ? getProviderErrorMessage(provider, data.analysis.providerWarning) : undefined
       });
-      if (data.analysis.providerWarning) setToast({ type: "error", message: data.analysis.providerWarning });
+      if (data.analysis.providerWarning) setToast({ type: "error", message: getProviderErrorMessage(provider, data.analysis.providerWarning) });
     } catch (error) {
-      setToast({ type: "error", message: error instanceof Error ? error.message : "Analysis gagal dibuat." });
+      setToast({ type: "error", message: providerMode === "REAL" ? getProviderErrorMessage(provider, error) : error instanceof Error ? error.message : "Analysis gagal dibuat." });
     } finally {
       setLoading(false);
     }
   }
 
   async function saveToProject() {
-    if (!projectId || !analysis.title) {
-      setToast({ type: "error", message: "Pilih Project dan isi title sebelum save." });
+    if (!trend) {
+      setToast({ type: "error", message: "Belum ada trend input untuk disimpan." });
       return;
     }
+    if (!projectId) {
+      setToast({ type: "error", message: "Pilih Project sebelum save." });
+      return;
+    }
+    const sourceStatus = getConnectionStatus(trend);
+    const draftTitle = analysis.title.trim() || `${trend.keyword} content idea`;
+    const draftHook = analysis.hook.trim() || trend.viralReason || `Mulai dari insight utama ${trend.keyword}.`;
+    const draftCaption = analysis.caption.trim() || `${trend.opportunity ?? trend.keyword} ${trend.hashtag}`;
+    const draftCta = analysis.cta.trim() || "Save this idea and turn it into a clip plan.";
+    const draftAudience = analysis.targetAudience.trim() || "Creators and teams validating real trend signals.";
+    const draftAngle = analysis.contentAngle.trim() || trend.opportunity || "Build an original short-form angle from the source signal.";
     setSaving(true);
     try {
       const response = await fetch("/api/content/save-from-analysis", {
@@ -238,17 +243,21 @@ function AIAnalysisContent() {
           platform: trend.platform,
           niche: trend.niche,
           keyword: trend.keyword,
-          hashtag: analysis.hashtag,
-          title: analysis.title,
-          hook: analysis.hook,
-          caption: analysis.caption,
-          cta: analysis.cta,
-          targetAudience: analysis.targetAudience,
-          contentAngle: analysis.contentAngle,
+          hashtag: analysis.hashtag || trend.hashtag,
+          title: draftTitle,
+          hook: draftHook,
+          caption: draftCaption,
+          cta: draftCta,
+          targetAudience: draftAudience,
+          contentAngle: draftAngle,
           editingStyle: analysis.editingStyle,
           suggestedDuration: analysis.duration,
-          fypScore: analysis.fypScore,
-          notes: `${analysis.notes}\nPosting time: ${analysis.postingTimeRecommendation}`
+          fypScore: trend.recommendationScore ?? trend.viralityScore ?? analysis.fypScore,
+          notes: `${analysis.notes || "Saved from AI Analysis trend input."}\nSource: ${trend.source ?? "unknown"}\nSource status: ${sourceStatus}\nSource URL: ${trend.sourceUrl ?? "not available"}\nPosting time: ${analysis.postingTimeRecommendation || "not generated"}`,
+          source: trend.source,
+          sourceUrl: trend.sourceUrl,
+          sourceStatus,
+          isDemo: sourceStatus !== "REAL"
         })
       });
       const data = await response.json();
@@ -269,13 +278,13 @@ function AIAnalysisContent() {
           <Brain className="h-4 w-4" />
           AI Analysis
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">AI Analysis</h1>
-        <p className="mt-3 max-w-3xl text-slate-300">Turn a trending signal into an editable content recommendation, then save it to a Project as Draft.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-white md:text-5xl">AI Analysis</h1>
+          <p className="mt-3 max-w-3xl text-slate-300">Turn a trending signal into an editable content recommendation, then save it to a Project as Draft.</p>
       </header>
 
       <RecentAnalysisList />
 
-      <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
+      {trend ? <section className="grid gap-6 xl:grid-cols-[0.75fr_1.25fr]">
         <div className="space-y-6">
           {trend.recommendationReason ? <div className="glass rounded-2xl p-5"><h2 className="text-xl font-semibold text-white">Why This Topic Is Recommended</h2><div className="mt-4 space-y-3"><Info label="Reason" value={trend.recommendationReason} /><Info label="Potential Content Angle" value={trend.opportunity ?? "Create a proof-first content angle."} /><Info label="Risk / Competition Note" value={`${trend.competitionLevel ?? "Medium"} competition. Validate the hook before scaling.`} /><Info label="Best Platform Suggestion" value={trend.platformFit ?? socialPlatformLabels[trend.platform]} /><Info label="Next Action" value={trend.recommendedAction ?? "Monitor first"} /><Info label="Recommendation Score" value={String(trend.recommendationScore ?? trend.viralityScore ?? "Not recorded")} /></div></div> : null}
           <div className="glass rounded-2xl p-5">
@@ -288,25 +297,25 @@ function AIAnalysisContent() {
               <Info label="Keyword" value={trend.keyword} />
               <Info label="Hashtag" value={trend.hashtag} />
               <Info label="Platform" value={socialPlatformLabels[trend.platform]} />
-              <Info label="Viral reason" value={trend.viralReason ?? "Dummy viral reason."} />
+              <Info label="Viral reason" value={trend.viralReason ?? "Not provided."} />
               <Info label="Competition" value={trend.competitionLevel ?? "Medium"} />
               <Info label="Opportunity" value={trend.opportunity ?? "Create a proof-first content angle."} />
-              <Info label="Data Source" value={trend.source ?? "Sample input"} />
-              <Info label="Data Mode" value={trend.isDemo === false ? "Real public signal" : "Demo / Sample"} />
+              <Info label="Data Source" value={trend.source ?? "Not connected"} />
+              <Info label="Data Mode" value={getConnectionBadge(trend)} />
               <Info label="Confidence" value={`${trend.confidence ?? 25}%`} />
-              <Info label="Collected" value={trend.collectedAt ? new Date(trend.collectedAt).toLocaleString("id-ID") : "Sample timestamp not available"} />
+              <Info label="Collected" value={trend.collectedAt ? new Date(trend.collectedAt).toLocaleString("id-ID") : "Timestamp not available"} />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Field label="AI Provider">
                 <select value={provider} onChange={(event) => setProvider(event.target.value as AIProviderName)} className="premium-input px-4 py-3">
                   <option value="GEMINI_VEO">Gemini</option>
                   <option value="OPENAI_SORA">OpenAI</option>
-                  <option value="MANUAL_UPLOAD">Dummy / Manual</option>
+                  <option value="MANUAL_UPLOAD">NOT CONNECTED / Manual</option>
                 </select>
               </Field>
               <Field label="Provider Mode">
                 <select value={providerMode} onChange={(event) => setProviderMode(event.target.value as ProviderMode)} className="premium-input px-4 py-3">
-                  <option value="DUMMY">Dummy explicit</option>
+                  <option value="DUMMY">NOT CONNECTED / Manual preview</option>
                   <option value="REAL">Real strict</option>
                 </select>
               </Field>
@@ -355,7 +364,7 @@ function AIAnalysisContent() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold text-white">Editable Recommendation</h2>
             <span className={clsx("rounded-full px-3 py-1 text-xs font-semibold", analysis.providerMode === "REAL" ? "bg-teal-300 text-slate-950" : "bg-amber-300/15 text-amber-100")}>
-              {analysis.providerMode === "REAL" ? "REAL Provider" : "DUMMY Explicit"}
+              {analysis.providerMode === "REAL" ? "REAL" : "NOT CONNECTED"}
             </span>
           </div>
           {analysis.providerWarning ? <div className="mb-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-sm text-amber-100">{analysis.providerWarning}</div> : null}
@@ -377,9 +386,16 @@ function AIAnalysisContent() {
             <Info label="Posting time recommendation" value={analysis.postingTimeRecommendation || "Generate analysis first."} strong />
           </div>
         </div>
-      </section>
+      </section> : <EmptyAnalysisState />}
     </div>
   );
+
+  function applyTrend(nextTrend: TrendInput) {
+    const status = getConnectionStatus(nextTrend);
+    setTrend(nextTrend);
+    setProviderMode(status === "REAL" ? "REAL" : "DUMMY");
+    setAnalysis({ ...emptyAnalysis, providerMode: status === "REAL" ? "REAL" : "DUMMY" });
+  }
 }
 
 function AIAnalysisLoading() {
@@ -400,6 +416,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Info({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"><div className="text-xs font-semibold uppercase text-slate-500">{label}</div><div className={clsx("mt-1 text-sm leading-6", strong ? "font-semibold text-teal-100" : "text-slate-300")}>{value}</div></div>;
+}
+
+function EmptyAnalysisState() {
+  return <section className="glass grid min-h-80 place-items-center rounded-2xl p-8 text-center"><div><Brain className="mx-auto mb-4 h-10 w-10 text-teal-300" /><h2 className="text-xl font-semibold text-white">Belum ada data untuk AI Analysis</h2><p className="mt-2 max-w-md text-sm leading-6 text-slate-400">Kirim hasil dari Trending Center atau Recommendation Engine. Jika tidak ada data real, halaman ini tidak membuat dummy analysis otomatis.</p><Link href="/trending-center" className="mt-5 inline-flex rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white">Buka Trending Center</Link></div></section>;
 }
 
 function Toast({ type, message, onClose }: { type: "success" | "error"; message: string; onClose: () => void }) {

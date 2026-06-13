@@ -16,7 +16,6 @@ export const googleTrendsSearchAdapter: IntelligenceSearchAdapter = {
     return "DEMO";
   },
   getProviderInfo() {
-    return { name: "Google Trends", source: "demoGoogleTrendsAdapter", isDemo: true, setupHint: "Apply for official Google Trends API alpha access before enabling real mode." };
+    return { name: "Google Trends", source: "google_trends_demo", isDemo: true, setupHint: "Apply for official Google Trends API alpha access before enabling real mode." };
   }
 };
-

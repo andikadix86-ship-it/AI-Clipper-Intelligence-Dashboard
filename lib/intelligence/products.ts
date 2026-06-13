@@ -33,9 +33,20 @@ function product(
     priceRange,
     contentPotentialScore,
     source: `${platform} manual demo dataset`,
+    sourceUrl: marketplaceProductUrl(platform, productName),
+    productUrl: marketplaceProductUrl(platform, productName),
     confidence: 30,
     collectedAt,
     isDemo: true,
-    notes: `Demo product insight. ${notes}`
+    notes: `NOT CONNECTED sample product insight. ${notes}`
   };
+}
+
+function marketplaceProductUrl(platform: AffiliateProductInsightDto["platform"], productName: string) {
+  const keyword = encodeURIComponent(productName.toLowerCase());
+  if (platform === "Shopee") return `https://shopee.co.id/search?keyword=${keyword}`;
+  if (platform === "TikTok Shop") return `https://www.tiktok.com/shop/search?q=${keyword}`;
+  if (platform === "Tokopedia") return `https://www.tokopedia.com/search?st=product&q=${keyword}`;
+  if (platform === "Lazada") return `https://www.lazada.co.id/catalog/?q=${keyword}`;
+  return `https://www.google.com/search?q=${keyword}`;
 }
